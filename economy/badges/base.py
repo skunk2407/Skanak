@@ -47,3 +47,32 @@ class Badge:
 
     def award(self, user_id: int) -> bool:
         return grant_badge(user_id, self.key)
+
+    # Routeur générique appelé par le dispatcher
+    # event: "work" | "daily" | "share" | "steal" | ...
+    # ctx: context discord
+    # kwargs peut contenir: user_state, sender_state, receiver_state, amount, thief_state, victim_state, stolen, stats
+    def on_event(self, event: str, ctx=None, **kwargs) -> bool:
+        stats = kwargs.get("stats")  # si tu en passes un
+        # On route sur les hooks spécialisés, avec valeurs par défaut si absentes
+        if event == "work":
+            return self.on_work(ctx, kwargs.get("user_state", {}), stats)
+        if event == "daily":
+            return self.on_daily(ctx, kwargs.get("user_state", {}), stats)
+        if event == "share":
+            return self.on_share(
+                ctx,
+                kwargs.get("sender_state", {}),
+                kwargs.get("receiver_state", {}),
+                kwargs.get("amount", 0),
+                stats,
+            )
+        if event == "steal":
+            return self.on_steal(
+                ctx,
+                kwargs.get("thief_state", {}),
+                kwargs.get("victim_state", {}),
+                kwargs.get("stolen", 0),
+                stats,
+            )
+        return False
