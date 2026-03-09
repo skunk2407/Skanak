@@ -76,7 +76,7 @@ async def dispatch_badge_event(event: str, ctx, **kwargs):
         if not embed:
             continue
 
-        image_path = os.path.join(os.path.dirname(__file__), "images", "resized", f"{badge.key}.png")
+        image_path = os.path.join(os.path.dirname(__file__), "images", "work", f"{badge.key}.png")
         if os.path.isfile(image_path):
             filename = f"{badge.key}.png"
             embed.set_thumbnail(url=f"attachment://{filename}")

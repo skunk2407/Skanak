@@ -10,7 +10,7 @@ from economy.badges import BADGES
 from economy.stats import get_user_stats, load_stats
 
 BASE_DIR = os.path.dirname(__file__)
-BADGES_DIR = os.path.join(BASE_DIR, "badges", "images", "resized")
+BADGES_DIR = os.path.join(BASE_DIR, "badges", "images", "work")
 SPRITE_DIR = os.path.join(BASE_DIR, "badges", "images", "sprite")
 PROFILE_CARD_DIR = os.path.join(SPRITE_DIR, "profile_cards")
 BADGE_GUIDE_PER_PAGE = 6
