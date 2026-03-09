@@ -24,4 +24,29 @@ BADGES = {
         "description": "Use `!work` 100 times.",
         "url": "",
     },
+    "share_bronze": {
+        "name": "Share Bronze",
+        "description": "Use `!share` 1 time.",
+        "url": "",
+    },
+    "share_silver": {
+        "name": "Share Silver",
+        "description": "Use `!share` 25 times.",
+        "url": "",
+    },
+    "share_gold": {
+        "name": "Share Gold",
+        "description": "Use `!share` 50 times.",
+        "url": "",
+    },
+    "share_diamand": {
+        "name": "Share Diamand",
+        "description": "Use `!share` 75 times.",
+        "url": "",
+    },
+    "share_red": {
+        "name": "Share Rouge",
+        "description": "Use `!share` 100 times.",
+        "url": "",
+    },
 }

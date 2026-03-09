@@ -136,6 +136,7 @@ class Economy(commands.Cog):
         receiver['cheese'] += amount
         receiver['cheese_since_last_spend'] = receiver.get('cheese_since_last_spend', 0) + amount
         sender['total_shared'] = sender.get('total_shared', 0) + amount
+        sender['share_count'] = int(sender.get('share_count', 0)) + 1
 
         save_stats(stats)
 
