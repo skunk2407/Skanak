@@ -112,6 +112,17 @@ class ShopMenuView(discord.ui.View):
         self.categories = _build_category_map()
         self._refresh_buttons()
 
+    def _rebuild_nav_row(self, show_pagination: bool):
+        for btn in (self.prev_btn, self.home_btn, self.next_btn):
+            if btn in self.children:
+                self.remove_item(btn)
+        if show_pagination:
+            self.add_item(self.prev_btn)
+            self.add_item(self.home_btn)
+            self.add_item(self.next_btn)
+        else:
+            self.add_item(self.home_btn)
+
     def _max_pages(self) -> int:
         if self.current_category == "home":
             return 1
@@ -121,8 +132,11 @@ class ShopMenuView(discord.ui.View):
     def _refresh_buttons(self):
         is_home = self.current_category == "home"
         max_pages = self._max_pages()
-        self.prev_btn.disabled = is_home or self.page <= 0
-        self.next_btn.disabled = is_home or self.page >= max_pages - 1
+        show_pagination = (not is_home) and max_pages > 1
+        self._rebuild_nav_row(show_pagination)
+
+        self.prev_btn.disabled = self.page <= 0
+        self.next_btn.disabled = self.page >= max_pages - 1
         self.home_btn.disabled = is_home
 
         self.roles_btn.style = discord.ButtonStyle.primary if self.current_category == "roles" else discord.ButtonStyle.secondary
