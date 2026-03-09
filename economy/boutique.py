@@ -70,7 +70,7 @@ def _build_category_map() -> Dict[str, List[dict]]:
 
 def _format_item(item: dict, category: str) -> str:
     if category == "exclusive":
-        return f"`#{item['code']}` **{item['name']}**\n{item.get('description', '-')}"
+        return item.get("description", "-")
 
     price = f"{int(item['price']):,} 🧀"
     details = ""
@@ -98,7 +98,7 @@ def _format_item(item: dict, category: str) -> str:
     elif "id" in item:
         details = "Unlocks server role"
 
-    return f"`#{item['code']}` **{item['name']}** - **{price}**\n{details}"
+    return f"**{price}**\n{details}"
 
 
 class ShopMenuView(discord.ui.View):
@@ -415,4 +415,3 @@ class Shop(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Shop(bot))
-
