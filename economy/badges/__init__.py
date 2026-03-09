@@ -1,3 +1,7 @@
+import os
+
+import discord
+
 from .base import Badge, grant_badge
 from .catalog import BADGES as CATALOG
 
@@ -75,4 +79,10 @@ async def dispatch_badge_event(event: str, ctx, **kwargs):
                 target = victim_member
         embed = b.build_embed(target)
         if embed:
-            await ctx.send(embed=embed)
+            image_path = os.path.join(os.path.dirname(__file__), "images", "resized", f"{b.key}.png")
+            if os.path.isfile(image_path):
+                filename = f"{b.key}.png"
+                embed.set_thumbnail(url=f"attachment://{filename}")
+                await ctx.send(embed=embed, file=discord.File(image_path, filename=filename))
+            else:
+                await ctx.send(embed=embed)
