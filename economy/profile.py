@@ -305,6 +305,7 @@ class ProfileCog(commands.Cog):
 
         # Badge preview (clean grid)
         draw.text((70, 620), "Badge Preview", font=badge_label_font, fill=(255, 233, 177, 255))
+        total_unlocked = len(badge_keys)
         badge_paths = self._existing_badge_images(badge_keys)
         preview_count = 8
         shown = badge_paths[:preview_count]
@@ -334,13 +335,16 @@ class ProfileCog(commands.Cog):
                 except Exception:
                     continue
         else:
-            draw.text((90, 690), "No badges unlocked yet.", font=hint_font, fill=(172, 186, 208, 255))
+            if total_unlocked > 0:
+                draw.text((90, 690), "Badge art pending update.", font=hint_font, fill=(172, 186, 208, 255))
+            else:
+                draw.text((90, 690), "No badges unlocked yet.", font=hint_font, fill=(172, 186, 208, 255))
 
-        remaining = max(0, len(badge_paths) - preview_count)
+        remaining = max(0, total_unlocked - preview_count)
         info_x = 520
         info_y = 700
         draw.rounded_rectangle((info_x, info_y, 820, 840), radius=18, fill=(46, 54, 77, 240), outline=(131, 215, 255, 255), width=2)
-        draw.text((info_x + 18, info_y + 20), f"Unlocked: {len(badge_paths)}", font=label_font, fill=(226, 235, 251, 255))
+        draw.text((info_x + 18, info_y + 20), f"Unlocked: {total_unlocked}", font=label_font, fill=(226, 235, 251, 255))
         if remaining > 0:
             draw.text(
                 (info_x + 18, info_y + 60),

@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 import discord
 from discord.ext import commands
 
-from economy.badges import BADGES, award_badge
 from economy.stats import get_user_stats, load_stats, save_stats
 from storage.database import load_app_state, save_app_state
 
@@ -399,27 +398,6 @@ class Shop(commands.Cog):
 
         save_stats(stats)
         await ctx.send(msg)
-
-        # Purchase badges
-        cnt = user["shop_purchases"]
-        if cnt == 10 and award_badge(ctx.author.id, "shop_veteran"):
-            info = BADGES["shop_veteran"]
-            embed = discord.Embed(
-                title="🎉 New Badge Unlocked!",
-                description=f"{ctx.author.mention}, you earned **{info['name']}**!",
-                color=discord.Color.gold(),
-            )
-            embed.set_thumbnail(url=info["url"])
-            await ctx.send(embed=embed)
-        elif cnt == 100 and award_badge(ctx.author.id, "shop_legend"):
-            info = BADGES["shop_legend"]
-            embed = discord.Embed(
-                title="🎉 New Badge Unlocked!",
-                description=f"{ctx.author.mention}, you earned **{info['name']}**!",
-                color=discord.Color.gold(),
-            )
-            embed.set_thumbnail(url=info["url"])
-            await ctx.send(embed=embed)
 
     @buy.error
     async def buy_error(self, ctx, error):

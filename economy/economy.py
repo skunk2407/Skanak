@@ -41,7 +41,6 @@ class Economy(commands.Cog):
         now = datetime.utcnow()
 
         # Cooldown 2h
-        first_work_ever = user['last_work'] is None
         if user['last_work']:
             last = datetime.fromisoformat(user['last_work'])
             rem = 7200 - (now - last).total_seconds()
@@ -57,6 +56,7 @@ class Economy(commands.Cog):
         user['cheese'] += reward
         user['total_earned'] += reward
         user['last_work'] = now.isoformat()
+        user['work_count'] = int(user.get('work_count', 0)) + 1
         user['cheese_since_last_spend'] = user.get('cheese_since_last_spend', 0) + reward
 
         # Record du plus gros gain au !work
@@ -73,9 +73,6 @@ class Economy(commands.Cog):
         else:
             user['quick_combo'] = 1
         user['last_action'] = 'work'
-
-        # Flag interne pour badge "first_work"
-        user['_just_first_work'] = 1 if first_work_ever else 0
 
         save_stats(stats)
 

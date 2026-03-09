@@ -1,9 +1,7 @@
 import random
 
-import discord
 from discord.ext import commands, tasks
 
-from economy.badges import BADGES, award_badge
 from economy.stats import get_user_stats, load_stats, save_stats
 
 CHEESE_ROLE_ID = 1296169417172062259  # CERTIFIED CHEESE ENJOYER role ID
@@ -13,24 +11,6 @@ class FunCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.daily_cheese_task.start()
-        bot.loop.create_task(self.initial_badge_scan())
-
-    async def initial_badge_scan(self):
-        await self.bot.wait_until_ready()
-        stats = load_stats()
-        updated = False
-        for guild in self.bot.guilds:
-            role = guild.get_role(CHEESE_ROLE_ID)
-            if not role:
-                continue
-            for member in role.members:
-                entry = get_user_stats(stats, member.id)
-                entry.setdefault("badges", [])
-                if "certified" not in entry["badges"]:
-                    entry["badges"].append("certified")
-                    updated = True
-        if updated:
-            save_stats(stats)
 
     def cog_unload(self):
         self.daily_cheese_task.cancel()
@@ -70,16 +50,6 @@ class FunCommands(commands.Cog):
                 if CHEESE_ROLE_ID not in entry["roles"]:
                     entry["roles"].append(CHEESE_ROLE_ID)
                 save_stats(stats)
-
-                if award_badge(ctx.author.id, "certified"):
-                    info = BADGES["certified"]
-                    embed = discord.Embed(
-                        title="🎉 New Badge Unlocked!",
-                        description=f"{ctx.author.mention}, you've just earned **{info['name']}**!",
-                        color=discord.Color.gold(),
-                    )
-                    embed.set_thumbnail(url=info["url"])
-                    await ctx.send(embed=embed)
                 await ctx.send(
                     f"🎉 Congrats {ctx.author.mention}, you're now a **CERTIFIED CHEESE ENJOYER**!"
                     " You now earn 50 cheese per day automatically."
@@ -100,4 +70,3 @@ class FunCommands(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(FunCommands(bot))
-

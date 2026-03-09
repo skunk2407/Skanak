@@ -27,6 +27,7 @@ DEFAULT_USER: Dict = {
     "last_stolen_time": 0.0,
     "rename_tokens": 0,
     "max_work_gain": 0,
+    "work_count": 0,
     # New stat: highest all-time cheese balance reached by the user
     "max_cheese": 0,
 }
@@ -62,4 +63,3 @@ def get_user_stats(stats: Dict, user_id: int) -> Dict:
                 user[key] = default if not isinstance(default, list) else list(default)
         user["max_cheese"] = max(int(user.get("max_cheese", 0) or 0), int(user.get("cheese", 0) or 0))
     return stats[uid]
-

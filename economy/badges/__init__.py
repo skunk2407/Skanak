@@ -2,87 +2,79 @@ import os
 
 import discord
 
-from .base import Badge, grant_badge
+from .base import grant_badge
 from .catalog import BADGES as CATALOG
+from .work_progression import WORK_BRONZE, WORK_DIAMOND, WORK_GOLD, WORK_SILVER
 
-# === Imports des badges avec logique dédiée ===
-from .first_work import FIRST_WORK
-from .hoarder import HOARDER
-from .streak_7 import STREAK_7
-from .streak_30 import STREAK_30
-from .wealth_1m import WEALTH_1M
-from .speed_runner import SPEED_RUNNER
-from .raid_boss import RAID_BOSS
-from .master_thief import MASTER_THIEF
-from .underdog import UNDERDOG
+REGISTRY = {
+    WORK_BRONZE.key: WORK_BRONZE,
+    WORK_SILVER.key: WORK_SILVER,
+    WORK_GOLD.key: WORK_GOLD,
+    WORK_DIAMOND.key: WORK_DIAMOND,
+}
 
-
-# --- Hydratation des infos (nom, desc, url) depuis le catalogue ---
-def _hydrate_from_catalog(b: Badge):
-    meta = CATALOG.get(b.key, {})
-    if meta:
-        b.name = meta.get("name", b.name)
-        b.description = meta.get("description", b.description)
-        b.url = meta.get("url", b.url)
-    return b
-
-
-# Registre des badges avec logique Python
-_REG = [
-    _hydrate_from_catalog(FIRST_WORK),
-    _hydrate_from_catalog(HOARDER),
-    _hydrate_from_catalog(STREAK_7),
-    _hydrate_from_catalog(STREAK_30),
-    _hydrate_from_catalog(WEALTH_1M),
-    _hydrate_from_catalog(SPEED_RUNNER),
-    _hydrate_from_catalog(RAID_BOSS),
-    _hydrate_from_catalog(MASTER_THIEF),
-    _hydrate_from_catalog(UNDERDOG),
-]
-
-REGISTRY = {b.key: b for b in _REG}
-
-# 👉 BADGES = tout le catalogue (pour affichage dans !profile et !badges)
 BADGES = CATALOG
+
+
+def _clean_badges(user_state: dict) -> bool:
+    badges = user_state.setdefault("badges", [])
+    cleaned = []
+    seen = set()
+    for key in badges:
+        if key in BADGES and key not in seen:
+            cleaned.append(key)
+            seen.add(key)
+
+    work_keys = ["work_bronze", "work_silver", "work_gold", "work_diamond"]
+    highest_work = None
+    for key in work_keys:
+        if key in cleaned:
+            highest_work = key
+    if highest_work:
+        cleaned = [key for key in cleaned if key not in work_keys]
+        cleaned.append(highest_work)
+
+    changed = cleaned != badges
+    if changed:
+        user_state["badges"] = cleaned
+    return changed
 
 
 # --- API publique ---
 def award_badge(user_id: int, key: str) -> bool:
-    """
-    Attribue un badge :
-      - Si badge avec logique (dans REGISTRY), utilise sa méthode .award
-      - Sinon, fallback sur grant_badge (ajout direct dans le stockage central)
-    """
+    if key not in BADGES:
+        return False
     b = REGISTRY.get(key)
     return b.award(user_id) if b else grant_badge(user_id, key)
 
 
 async def dispatch_badge_event(event: str, ctx, **kwargs):
-    """
-    Notifie tous les badges de l'événement donné.
-    Ex: event="work", "daily", "share", "steal"...
-    """
-    triggered = []
-    for b in REGISTRY.values():
-        try:
-            if b.on_event(event, ctx, **kwargs):
-                triggered.append(b)
-        except Exception as e:
-            print(f"[Badge {b.key}] Error in on_event: {e}")
+    """Dispatch badge events and post unlock embeds when a new badge is earned."""
+    stats = kwargs.get("stats")
+    user_state = kwargs.get("user_state")
+    if isinstance(user_state, dict) and _clean_badges(user_state):
+        from economy.stats import save_stats
 
-    # Feedback visuel pour chaque badge gagné
-    for b in triggered:
+        save_stats(stats)
+
+    triggered = []
+    for badge in REGISTRY.values():
+        try:
+            if badge.on_event(event, ctx, **kwargs):
+                triggered.append(badge)
+        except Exception as exc:
+            print(f"[Badge {badge.key}] Error in on_event: {exc}")
+
+    for badge in triggered:
         target = ctx.author
-        if b.key == "raid_boss":
-            victim_member = kwargs.get("victim_member")
-            if victim_member is not None:
-                target = victim_member
-        embed = b.build_embed(target)
-        if embed:
-            image_path = os.path.join(os.path.dirname(__file__), "images", "resized", f"{b.key}.png")
-            if os.path.isfile(image_path):
-                filename = f"{b.key}.png"
-                embed.set_thumbnail(url=f"attachment://{filename}")
-                await ctx.send(embed=embed, file=discord.File(image_path, filename=filename))
-            else:
-                await ctx.send(embed=embed)
+        embed = badge.build_embed(target)
+        if not embed:
+            continue
+
+        image_path = os.path.join(os.path.dirname(__file__), "images", "resized", f"{badge.key}.png")
+        if os.path.isfile(image_path):
+            filename = f"{badge.key}.png"
+            embed.set_thumbnail(url=f"attachment://{filename}")
+            await ctx.send(embed=embed, file=discord.File(image_path, filename=filename))
+        else:
+            await ctx.send(embed=embed)
