@@ -99,24 +99,18 @@ class ApplicationModal(Modal, title="Community Application"):
             max_length=60,
             required=True,
         )
-        self.known_people = TextInput(
-            label="Do you know anyone from our community?",
-            placeholder="Write names or 'No'.",
-            max_length=150,
-            required=True,
-        )
-        self.best_kills = TextInput(
-            label="Highest kills in one round",
-            placeholder="Example: 28",
-            max_length=20,
+        self.community_info = TextInput(
+            label="Community contacts / previous regiment",
+            placeholder="Write names and regiment, or 'None'.",
+            style=discord.TextStyle.paragraph,
+            max_length=300,
             required=True,
         )
         self.add_item(self.reason)
         self.add_item(self.regiment)
         self.add_item(self.hours)
         self.add_item(self.ingame_name)
-        self.add_item(self.known_people)
-        self.add_item(self.best_kills)
+        self.add_item(self.community_info)
 
     async def on_submit(self, interaction: discord.Interaction):
         answers = {
@@ -124,8 +118,7 @@ class ApplicationModal(Modal, title="Community Application"):
             "Previous regiment (if any)": str(self.regiment.value).strip(),
             "How many hours have you played?": str(self.hours.value).strip(),
             "What is your in-game name?": str(self.ingame_name.value).strip(),
-            "Do you know anyone from our community?": str(self.known_people.value).strip(),
-            "Highest kills in one round": str(self.best_kills.value).strip(),
+            "Community contacts / previous regiment details": str(self.community_info.value).strip(),
         }
         await self.cog.submit_application(interaction, answers)
 
@@ -393,4 +386,3 @@ class ApplyCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ApplyCog(bot))
-
