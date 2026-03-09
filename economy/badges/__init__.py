@@ -4,6 +4,7 @@ import discord
 
 from .base import grant_badge
 from .catalog import BADGES as CATALOG
+from .daily_progression import DAILY_BRONZE, DAILY_DIAMAND, DAILY_GOLD, DAILY_RED, DAILY_SILVER
 from .share_progression import SHARE_BRONZE, SHARE_DIAMAND, SHARE_GOLD, SHARE_RED, SHARE_SILVER
 from .work_progression import WORK_BRONZE, WORK_DIAMAND, WORK_GOLD, WORK_RED, WORK_SILVER
 
@@ -18,6 +19,11 @@ REGISTRY = {
     SHARE_GOLD.key: SHARE_GOLD,
     SHARE_DIAMAND.key: SHARE_DIAMAND,
     SHARE_RED.key: SHARE_RED,
+    DAILY_BRONZE.key: DAILY_BRONZE,
+    DAILY_SILVER.key: DAILY_SILVER,
+    DAILY_GOLD.key: DAILY_GOLD,
+    DAILY_DIAMAND.key: DAILY_DIAMAND,
+    DAILY_RED.key: DAILY_RED,
 }
 
 BADGES = CATALOG
@@ -30,6 +36,9 @@ def _clean_badges(user_state: dict) -> bool:
         user_state["badges"] = badges
     if "share_diamond" in badges and "share_diamand" not in badges:
         badges = ["share_diamand" if key == "share_diamond" else key for key in badges]
+        user_state["badges"] = badges
+    if "daily_diamond" in badges and "daily_diamand" not in badges:
+        badges = ["daily_diamand" if key == "daily_diamond" else key for key in badges]
         user_state["badges"] = badges
 
     cleaned = []
@@ -56,6 +65,15 @@ def _clean_badges(user_state: dict) -> bool:
     if highest_share:
         cleaned = [key for key in cleaned if key not in share_keys]
         cleaned.append(highest_share)
+
+    daily_keys = ["daily_bronze", "daily_silver", "daily_gold", "daily_diamand", "daily_red"]
+    highest_daily = None
+    for key in daily_keys:
+        if key in cleaned:
+            highest_daily = key
+    if highest_daily:
+        cleaned = [key for key in cleaned if key not in daily_keys]
+        cleaned.append(highest_daily)
 
     changed = cleaned != badges
     if changed:

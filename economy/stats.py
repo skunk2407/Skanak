@@ -7,6 +7,7 @@ DEFAULT_USER: Dict = {
     "cheese": 0,
     "last_work": None,
     "last_daily": None,
+    "daily_count": 0,
     "daily_streak": 0,
     "safe_mode_expiry": 0,
     "safe_mode_permanent": False,

@@ -111,6 +111,7 @@ class Economy(commands.Cog):
         user['cheese'] += reward
         user['total_earned'] += reward
         user['last_daily'] = now.isoformat()
+        user['daily_count'] = int(user.get('daily_count', 0)) + 1
         user['last_action'] = 'daily'
         user['cheese_since_last_spend'] = user.get('cheese_since_last_spend', 0) + reward
 

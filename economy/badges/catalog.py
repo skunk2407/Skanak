@@ -49,4 +49,29 @@ BADGES = {
         "description": "Use `!share` 100 times.",
         "url": "",
     },
+    "daily_bronze": {
+        "name": "Daily Bronze",
+        "description": "Use `!daily` 1 time.",
+        "url": "",
+    },
+    "daily_silver": {
+        "name": "Daily Silver",
+        "description": "Use `!daily` 25 times.",
+        "url": "",
+    },
+    "daily_gold": {
+        "name": "Daily Gold",
+        "description": "Use `!daily` 50 times.",
+        "url": "",
+    },
+    "daily_diamand": {
+        "name": "Daily Diamand",
+        "description": "Use `!daily` 75 times.",
+        "url": "",
+    },
+    "daily_red": {
+        "name": "Daily Rouge",
+        "description": "Use `!daily` 100 times.",
+        "url": "",
+    },
 }
