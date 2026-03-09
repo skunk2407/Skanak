@@ -11,8 +11,8 @@ from economy.stats import get_user_stats, load_stats
 
 BASE_DIR = os.path.dirname(__file__)
 BADGES_DIR = os.path.join(BASE_DIR, "badges", "images", "work")
-SPRITE_DIR = os.path.join(BASE_DIR, "badges", "images", "sprite")
-PROFILE_CARD_DIR = os.path.join(SPRITE_DIR, "profile_cards")
+PROJECT_DIR = os.path.dirname(BASE_DIR)
+PROFILE_CARD_DIR = os.path.join(PROJECT_DIR, "data", "profile_cards")
 BADGE_GUIDE_PER_PAGE = 6
 UNLOCKED_BADGES_PER_PAGE = 8
 
