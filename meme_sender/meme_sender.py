@@ -1,19 +1,31 @@
+import asyncio
+import os
+import random
+from datetime import datetime, timedelta, timezone
+
 import discord
 from discord.ext import commands, tasks
-import os, random, asyncio
-from datetime import datetime, timedelta, timezone
 
 from storage.database import load_app_state, save_app_state
 
 MEME_INDEX_STATE_KEY = "meme.index"
-USED_COOLDOWN_DAYS = 30      # ne pas re-poster un meme utilisé < 30 jours
-MIN_AGE_DAYS = 90            # ne poster que des memes âgés de > 90 jours
-BATCH_SIZE = 400             # messages parcourus par vague d'indexation
-BATCH_SLEEP = 30             # pause entre vagues (sec) pour éviter ratelimit
+USED_COOLDOWN_DAYS = 30
+MIN_AGE_DAYS = 90
+BATCH_SIZE = 400
+BATCH_SLEEP = 30
 EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov")
+
+
+def _env_flag(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+
 
 def now_utc_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
+
 
 def load_index():
     idx = load_app_state(MEME_INDEX_STATE_KEY, default={"items": {}, "last_cursor_id": None})
@@ -23,21 +35,41 @@ def load_index():
     idx.setdefault("last_cursor_id", None)
     return idx
 
+
 def save_index(idx):
     save_app_state(MEME_INDEX_STATE_KEY, idx)
+
 
 class MemeSender(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.index = load_index()
         self._indexing = False
-        self.send_meme.start()
-        self.backfill_index.start()
 
-    # ========== INDEXATION PROGRESSIVE ==========
+        self.auto_meme_enabled = _env_flag("SKANAK_AUTO_MEME_ENABLED", default=True)
+        self.meme_backfill_enabled = _env_flag(
+            "SKANAK_MEME_BACKFILL_ENABLED",
+            default=self.auto_meme_enabled,
+        )
+
+        if self.auto_meme_enabled:
+            self.send_meme.start()
+        else:
+            print("[meme] auto meme posting disabled by SKANAK_AUTO_MEME_ENABLED")
+
+        if self.meme_backfill_enabled:
+            self.backfill_index.start()
+        else:
+            print("[meme-index] backfill disabled by SKANAK_MEME_BACKFILL_ENABLED")
+
+    def cog_unload(self):
+        if self.send_meme.is_running():
+            self.send_meme.cancel()
+        if self.backfill_index.is_running():
+            self.backfill_index.cancel()
+
     @tasks.loop(minutes=5, reconnect=True)
     async def backfill_index(self):
-        """Par petites vagues, on complète l'index pour remonter très loin dans l'historique sans se faire rate-limit."""
         channel_id = int(os.getenv("MEME_CHANNEL_ID", "0"))
         channel = self.bot.get_channel(channel_id)
         if channel is None or self._indexing:
@@ -46,7 +78,6 @@ class MemeSender(commands.Cog):
         self._indexing = True
         try:
             before = None
-            # on reprend au dernier curseur si on l'a
             cursor = self.index.get("last_cursor_id")
             if cursor:
                 try:
@@ -77,13 +108,11 @@ class MemeSender(commands.Cog):
                     }
                     collected += 1
 
-                # met à jour le curseur au fur et à mesure
                 self.index["last_cursor_id"] = str(msg.id)
 
             if collected:
                 save_index(self.index)
                 print(f"[meme-index] +{collected} items (total {len(self.index['items'])})")
-            # petite pause entre vagues
             await asyncio.sleep(BATCH_SLEEP)
         except Exception as e:
             print(f"[meme-index][err] {e}")
@@ -94,7 +123,6 @@ class MemeSender(commands.Cog):
     async def before_backfill(self):
         await self.bot.wait_until_ready()
 
-    # ========== ENVOI PÉRIODIQUE ==========
     @tasks.loop(hours=3, reconnect=True)
     async def send_meme(self):
         print("[meme] loop tick")
@@ -105,57 +133,52 @@ class MemeSender(commands.Cog):
                 print(f"[meme] channel {channel_id} not found")
                 return
 
-            # Limite d’upload du serveur
             max_size = getattr(channel.guild, "filesize_limit", 8_000_000)
-
-            # Filtre: assez ancien + pas utilisé récemment + pas blacklist + taille OK
             now = datetime.now(tz=timezone.utc)
             min_age_dt = now - timedelta(days=MIN_AGE_DAYS)
             cooldown_dt = now - timedelta(days=USED_COOLDOWN_DAYS)
 
             candidates = []
-            for key, it in self.index["items"].items():
-                if it["blacklisted"]:
+            for key, item in self.index["items"].items():
+                if item["blacklisted"]:
                     continue
                 try:
-                    created = datetime.fromisoformat(it["created_at"])
+                    created = datetime.fromisoformat(item["created_at"])
                 except Exception:
                     continue
                 if created > min_age_dt:
                     continue
-                if it["size"] is not None and it["size"] > max_size:
+                if item["size"] is not None and item["size"] > max_size:
                     continue
-                last_used = datetime.fromisoformat(it["last_used_at"]) if it["last_used_at"] else None
+                last_used = datetime.fromisoformat(item["last_used_at"]) if item["last_used_at"] else None
                 if last_used and last_used > cooldown_dt:
                     continue
-                candidates.append((key, it))
+                candidates.append((key, item))
 
             if not candidates:
-                print("[meme] aucun candidat (index encore court ?)")
+                print("[meme] no candidate found")
                 return
 
-            key, it = random.choice(candidates)
+            key, item = random.choice(candidates)
             temp_dir = os.path.join(os.path.dirname(__file__), "temp")
             os.makedirs(temp_dir, exist_ok=True)
-            file_path = os.path.join(temp_dir, it["filename"])
+            file_path = os.path.join(temp_dir, item["filename"])
 
-            # On retélécharge depuis l’attachment d’origine (plus fiable que l’URL si signée)
             try:
-                msg = await channel.fetch_message(it["message_id"])
-                att = next((a for a in msg.attachments if a.id == it["attachment_id"]), None)
+                msg = await channel.fetch_message(item["message_id"])
+                att = next((a for a in msg.attachments if a.id == item["attachment_id"]), None)
                 if att is None:
-                    raise RuntimeError("attachment plus présent")
+                    raise RuntimeError("attachment not available")
                 await att.save(file_path)
                 await channel.send(file=discord.File(file_path))
-                it["last_used_at"] = now_utc_iso()
-                it["uses"] = int(it.get("uses", 0)) + 1
+                item["last_used_at"] = now_utc_iso()
+                item["uses"] = int(item.get("uses", 0)) + 1
                 save_index(self.index)
-                print(f"[meme] posté: {it['filename']} (uses={it['uses']})")
+                print(f"[meme] posted: {item['filename']} (uses={item['uses']})")
             except discord.HTTPException as e:
                 print(f"[meme][HTTP] {e}")
-                # Erreurs d’upload → si taille/permission : blacklist pour éviter de re-essayer en boucle
                 if "Request entity too large" in str(e):
-                    it["blacklisted"] = True
+                    item["blacklisted"] = True
                     save_index(self.index)
             except Exception as e:
                 print(f"[meme][err] {e}")
@@ -165,7 +188,6 @@ class MemeSender(commands.Cog):
                         os.remove(file_path)
                 except Exception:
                     pass
-
         except Exception as e:
             print(f"[meme][fatal] {e}")
 
@@ -173,5 +195,7 @@ class MemeSender(commands.Cog):
     async def before_send(self):
         await self.bot.wait_until_ready()
 
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(MemeSender(bot))
+

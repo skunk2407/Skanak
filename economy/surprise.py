@@ -1,4 +1,5 @@
 import asyncio
+import os
 import random
 
 import discord
@@ -9,15 +10,27 @@ from .stats import get_user_stats, load_stats, save_stats
 GENERAL_CHANNEL_ID = 577913608323727362
 
 
+def _env_flag(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+
+
 class SurpriseCog(commands.Cog):
     """Cog for periodic surprise cheese gifts."""
 
     def __init__(self, bot):
         self.bot = bot
-        self.gift_task.start()
+        self.auto_gift_enabled = _env_flag("SKANAK_AUTO_GIFT_ENABLED", default=True)
+        if self.auto_gift_enabled:
+            self.gift_task.start()
+        else:
+            print("[gift] auto gift loop disabled by SKANAK_AUTO_GIFT_ENABLED")
 
     def cog_unload(self):
-        self.gift_task.stop()
+        if self.gift_task.is_running():
+            self.gift_task.stop()
 
     @tasks.loop(hours=10)
     async def gift_task(self):
@@ -59,4 +72,3 @@ class SurpriseCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(SurpriseCog(bot))
-
