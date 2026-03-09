@@ -7,7 +7,6 @@
   - economy user stats
   - lottery state
   - rename locks
-  - birthdays
   - counting state
   - meme index
   - cheese leaderboard state
@@ -20,7 +19,7 @@
 ## VPS deploy flow
 1. Backup current runtime data before first deploy:
    - `cd /opt/SkanakBot/Skanak`
-   - `tar -czf /tmp/skanak-runtime-backup-$(date +%F).tgz economy/*.json birthday/*.json counting/*.json meme_sender/*.json`
+   - `tar -czf /tmp/skanak-runtime-backup-$(date +%F).tgz economy/*.json counting/*.json meme_sender/*.json`
 2. Deploy code:
    - `sudo update-skanak`
 3. Check logs:
@@ -30,4 +29,3 @@
 
 ## Optional: custom DB location
 Set `SKANAK_DB_PATH` in your service environment if you want another path.
-

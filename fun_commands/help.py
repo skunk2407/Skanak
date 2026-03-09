@@ -202,9 +202,7 @@ class MyHelp(commands.HelpCommand):
         embed.add_field(
             name="Slash Commands",
             value=(
-                "`/richest` — Top cheese balances\n"
-                "`/birthday` — Set your birthday\n"
-                "`/modify_birthday` — Update your birthday"
+                "`/richest` — Top cheese balances"
             ),
             inline=False,
         )
@@ -260,4 +258,3 @@ class HelpCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(HelpCog(bot))
-

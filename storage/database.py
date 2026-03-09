@@ -14,7 +14,6 @@ DATABASE_PATH = Path(os.getenv("SKANAK_DB_PATH", str(DATA_DIR / "skanak.db")))
 _LEGACY_STATE_FILES = {
     "economy.lottery": ROOT_DIR / "economy" / "lottery.json",
     "economy.renames": ROOT_DIR / "economy" / "renames.json",
-    "birthday.birthdays": ROOT_DIR / "birthday" / "birthday.json",
     "counting.state": ROOT_DIR / "counting" / "count.json",
     "meme.index": ROOT_DIR / "meme_sender" / "meme_index.json",
     "fun.cheese_leaderboard": ROOT_DIR / "fun_commands" / "cheese_leaderboard.json",
