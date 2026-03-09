@@ -10,8 +10,7 @@ UNDERDOG = Badge(
 class _Underdog(Badge):
     def on_steal(self, ctx, thief_state, victim_state, stolen, stats):
         if thief_state.get("total_stolen", 0) > thief_state.get("total_earned", 0):
-            if self.award(ctx.author.id):
-                return "thief"
+            return self.award(ctx.author.id)
         return False
 
 UNDERDOG.__class__ = _Underdog

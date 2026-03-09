@@ -10,8 +10,7 @@ MASTER_THIEF = Badge(
 class _MasterThief(Badge):
     def on_steal(self, ctx, thief_state, victim_state, stolen, stats):
         if len(thief_state.get("theft_victims", [])) >= 50:
-            if self.award(ctx.author.id):
-                return "thief"
+            return self.award(ctx.author.id)
         return False
 
 MASTER_THIEF.__class__ = _MasterThief

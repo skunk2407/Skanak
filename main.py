@@ -1,19 +1,23 @@
 import os
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
-# On importe la migration, sans exécuter dès l'import
 import migrate_stats
+from storage.database import DATABASE_PATH, initialize_database, migrate_legacy_runtime_data
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
+    raise RuntimeError("Missing DISCORD_TOKEN in environment.")
 
 intents = discord.Intents.default()
-intents.members         = True
-intents.reactions       = True
+intents.members = True
+intents.reactions = True
 intents.message_content = True
-intents.voice_states    = True
+intents.voice_states = True
+
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -37,28 +41,33 @@ class MyBot(commands.Bot):
             "purge.purge_ban",
             "economy.slash",
             "economy.extras",
-            "logs.mod_logs"
+            "logs.mod_logs",
         ]
         for ext in initial_extensions:
             await self.load_extension(ext)
 
-        # Sync des slash-commands
         await self.tree.sync()
-        print(f"{self.user} — cogs loaded & slash commands synced.")
+        print(f"{self.user} - cogs loaded & slash commands synced.")
+
 
 bot = MyBot()
 
+
 @bot.event
 async def on_ready():
-    print(f"{bot.user} est connecté et prêt !")
+    print(f"{bot.user} est connecte et pret !")
+
 
 @bot.command()
 async def sync(ctx):
     await bot.tree.sync()
-    await ctx.send("Les slash-commands ont été synchronisées !")
+    await ctx.send("Les slash-commands ont ete synchronisees !")
 
-# --- Migration des stats avant démarrage du bot ---
+
+initialize_database()
+migrate_legacy_runtime_data()
 migrate_stats.migrate()
+print(f"[Storage] SQLite ready at: {DATABASE_PATH}")
 
-# --- Démarrage du bot (une seule fois) ---
 bot.run(TOKEN)
+

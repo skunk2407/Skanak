@@ -1,6 +1,6 @@
-import os
-import json
 from typing import Dict
+
+from economy.stats import load_stats as _load_stats, save_stats as _save_stats
 
 BADGES = {
   'first_work': {
@@ -70,18 +70,11 @@ BADGES = {
     }
 }
 
-# === utilitaires badge ===
-USER_STATS = os.path.join(os.path.dirname(__file__), 'user_stats.json')
-
 def load_stats() -> Dict:
-    if not os.path.exists(USER_STATS):
-        return {}
-    with open(USER_STATS, 'r') as f:
-        return json.load(f)
+    return _load_stats()
 
 def save_stats(stats: Dict):
-    with open(USER_STATS, 'w') as f:
-        json.dump(stats, f, indent=4)
+    _save_stats(stats)
 
 def award_badge(user_id: int, badge_key: str) -> bool:
     """

@@ -1,5 +1,9 @@
 .env
 *.db
+*.sqlite
+*.sqlite3
 __pycache__/
 *.pyc
 venv/
+data/
+meme_sender/temp/

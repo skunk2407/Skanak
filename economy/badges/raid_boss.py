@@ -11,8 +11,9 @@ class _RaidBoss(Badge):
     # Ici c'est la victime qui gagne le badge
     def on_steal(self, ctx, thief_state, victim_state, stolen, stats):
         if victim_state.get("consecutive_stolen_count", 0) >= 10:
-            if self.award(ctx.message.mentions[0].id if ctx.message.mentions else ctx.author.id):
-                return "victim"
+            victim_id = ctx.message.mentions[0].id if ctx.message.mentions else None
+            if victim_id is not None:
+                return self.award(victim_id)
         return False
 
 RAID_BOSS.__class__ = _RaidBoss

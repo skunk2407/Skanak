@@ -1,9 +1,11 @@
 import discord
 from discord.ext import commands, tasks
-import os, json, random, asyncio, time
+import os, random, asyncio
 from datetime import datetime, timedelta, timezone
 
-INDEX_PATH = os.path.join(os.path.dirname(__file__), "meme_index.json")
+from storage.database import load_app_state, save_app_state
+
+MEME_INDEX_STATE_KEY = "meme.index"
 USED_COOLDOWN_DAYS = 30      # ne pas re-poster un meme utilisé < 30 jours
 MIN_AGE_DAYS = 90            # ne poster que des memes âgés de > 90 jours
 BATCH_SIZE = 400             # messages parcourus par vague d'indexation
@@ -14,14 +16,15 @@ def now_utc_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 def load_index():
-    if not os.path.exists(INDEX_PATH):
+    idx = load_app_state(MEME_INDEX_STATE_KEY, default={"items": {}, "last_cursor_id": None})
+    if not isinstance(idx, dict):
         return {"items": {}, "last_cursor_id": None}
-    with open(INDEX_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    idx.setdefault("items", {})
+    idx.setdefault("last_cursor_id", None)
+    return idx
 
 def save_index(idx):
-    with open(INDEX_PATH, "w", encoding="utf-8") as f:
-        json.dump(idx, f, indent=2)
+    save_app_state(MEME_INDEX_STATE_KEY, idx)
 
 class MemeSender(commands.Cog):
     def __init__(self, bot: commands.Bot):

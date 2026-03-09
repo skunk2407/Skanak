@@ -1,5 +1,3 @@
-import os
-import json
 from datetime import datetime
 
 import discord
@@ -7,6 +5,7 @@ from discord.ext import commands
 
 from economy.stats import load_stats, save_stats, get_user_stats
 from economy.badges import award_badge, BADGES
+from storage.database import load_app_state, save_app_state
 
 # === Items de base ===
 shop_items = [
@@ -44,10 +43,6 @@ shop_items = shop_items + extra_items
 class Shop(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.leaderboard_file = os.path.join(os.path.dirname(__file__), "cheese_leaderboard.json")
-        if not os.path.exists(self.leaderboard_file):
-            with open(self.leaderboard_file, 'w') as f:
-                json.dump([], f)
 
     @commands.command(name='shop')
     async def shop(self, ctx: commands.Context):
@@ -221,16 +216,12 @@ class Shop(commands.Cog):
             msg = f"💥 Cheese Bomb exploded! Gave **{amount_each} 🧀** to **{credited}** members."
 
         elif item.get('lottery_ticket'):
-            lotto_path = os.path.join(os.path.dirname(__file__), "lottery.json")
-            try:
-                with open(lotto_path, "r") as f:
-                    lotto = json.load(f)
-            except Exception:
+            lotto = load_app_state("economy.lottery", default={})
+            if not isinstance(lotto, dict):
                 lotto = {}
             gid = str(ctx.guild.id) if ctx.guild else "global"
             lotto.setdefault(gid, []).append(str(ctx.author.id))
-            with open(lotto_path, "w") as f:
-                json.dump(lotto, f, indent=2)
+            save_app_state("economy.lottery", lotto)
             msg = "🎟️ Ticket purchased! Good luck for the next draw."
 
         elif item.get('rename_power'):

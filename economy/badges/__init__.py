@@ -47,7 +47,7 @@ def award_badge(user_id: int, key: str) -> bool:
     """
     Attribue un badge :
       - Si badge avec logique (dans REGISTRY), utilise sa méthode .award
-      - Sinon, fallback sur grant_badge (ajout direct dans user_stats.json)
+      - Sinon, fallback sur grant_badge (ajout direct dans le stockage central)
     """
     b = REGISTRY.get(key)
     return b.award(user_id) if b else grant_badge(user_id, key)
@@ -68,6 +68,11 @@ async def dispatch_badge_event(event: str, ctx, **kwargs):
 
     # Feedback visuel pour chaque badge gagné
     for b in triggered:
-        embed = b.build_embed(ctx.author)
+        target = ctx.author
+        if b.key == "raid_boss":
+            victim_member = kwargs.get("victim_member")
+            if victim_member is not None:
+                target = victim_member
+        embed = b.build_embed(target)
         if embed:
             await ctx.send(embed=embed)

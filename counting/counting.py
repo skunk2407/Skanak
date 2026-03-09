@@ -1,68 +1,64 @@
-import discord
-from discord.ext import commands
-import json
 import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+from discord.ext import commands
 
-# Get the counting channel ID from .env
-COUNTING_CHANNEL_ID = int(os.getenv("COUNTING_CHANNEL"))
+from storage.database import load_app_state, save_app_state
+
+COUNTING_STATE_KEY = "counting.state"
+
+
+def _counting_channel_id():
+    raw = os.getenv("COUNTING_CHANNEL", "")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
 
 def load_count():
-    file_path = os.path.join(os.path.dirname(__file__), 'count.json')
-    # Vérifie si count.json existe
-    if not os.path.exists(file_path):
-        raise FileNotFoundError("Le fichier 'count.json' n'existe pas.")
-    
-    # Charge les données à partir de count.json
-    with open(file_path, 'r') as f:
-        count_data = json.load(f)  # Charge les données JSON en tant que dictionnaire
-    return count_data
+    data = load_app_state(COUNTING_STATE_KEY, default={"current_count": 0})
+    if not isinstance(data, dict):
+        data = {"current_count": 0}
+    data.setdefault("current_count", 0)
+    return data
+
 
 def save_count(count_data):
-    file_path = os.path.join(os.path.dirname(__file__), 'count.json')
-    with open(file_path, 'w') as f:
-        json.dump(count_data, f)  # Sauvegarde les données en format JSON
+    save_app_state(COUNTING_STATE_KEY, count_data)
+
 
 class CountingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.count_file = 'count.json'
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
-            return  # Ignore bot messages
-
-        # Check if the message is in the correct counting channel
-        if message.channel.id != COUNTING_CHANNEL_ID:
             return
 
-        # Load the last count from the file
+        channel_id = _counting_channel_id()
+        if not channel_id:
+            return
+        if message.channel.id != channel_id:
+            return
+
         count_data = load_count()
-        current_count = count_data["current_count"]
+        current_count = int(count_data.get("current_count", 0))
 
-        # Check if the message contains a number
         try:
-            count_number = int(message.content)
+            count_number = int(message.content.strip())
         except ValueError:
-            await message.delete()  # Supprime le message si ce n'est pas un nombre
+            await message.delete()
             return
 
-        # Check if the number is the next in sequence
         if count_number == current_count + 1:
-            # Update the count and save
             count_data["current_count"] = count_number
             save_count(count_data)
-
-            # Ajouter une réaction de validation
             await message.add_reaction("✅")
         else:
-            # Supprime le message si le nombre n'est pas correct
             await message.delete()
 
-# Fonction setup pour charger le cog
+
 async def setup(bot):
     await bot.add_cog(CountingCog(bot))
+

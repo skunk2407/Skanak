@@ -1,5 +1,3 @@
-import os
-import json
 import random
 import asyncio
 from datetime import datetime, timedelta
@@ -9,20 +7,17 @@ import discord
 from discord.ext import commands, tasks
 
 from .stats import load_stats, save_stats, get_user_stats
+from storage.database import load_app_state, save_app_state
 
-LOTT_PATH = os.path.join(os.path.dirname(__file__), "lottery.json")
-RENAMES_PATH = os.path.join(os.path.dirname(__file__), "renames.json")
+LOTT_STATE_KEY = "economy.lottery"
+RENAMES_STATE_KEY = "economy.renames"
 
-def _load_json(path: str):
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+def _load_state(state_key: str):
+    data = load_app_state(state_key, default={})
+    return data if isinstance(data, dict) else {}
 
-def _save_json(path: str, data):
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+def _save_state(state_key: str, data):
+    save_app_state(state_key, data)
 
 def humanize(seconds: float) -> str:
     s = max(0, int(seconds))
@@ -60,7 +55,7 @@ class EconomyExtras(commands.Cog):
         if after.guild is None:
             return
 
-        renames = _load_json(RENAMES_PATH)
+        renames = _load_state(RENAMES_STATE_KEY)
         gid = str(after.guild.id)
         uid = str(after.id)
         data = renames.get(gid, {}).get(uid)
@@ -87,7 +82,7 @@ class EconomyExtras(commands.Cog):
     @commands.command(name="lottery")
     async def lottery_info(self, ctx: commands.Context):
         """Afficher l'état de la loterie du serveur (tickets & pot estimé)."""
-        lotto = _load_json(LOTT_PATH)
+        lotto = _load_state(LOTT_STATE_KEY)
         gid = str(ctx.guild.id) if ctx.guild else "global"
         entries = lotto.get(gid, [])
         pot = int(len(entries) * 500 * 0.9)
@@ -146,7 +141,7 @@ class EconomyExtras(commands.Cog):
         save_stats(stats)
 
         lotto[gid] = []
-        _save_json(LOTT_PATH, lotto)
+        _save_state(LOTT_STATE_KEY, lotto)
 
         if winner:
             await ctx.send(f"🎉 **Lottery Winner:** {winner.mention} wins **{jackpot:,}** 🧀! GG!")
@@ -172,7 +167,7 @@ class EconomyExtras(commands.Cog):
         if len(new_nick) > 32:
             return await ctx.send("❌ Nickname too long (max 32 chars).")
 
-        renames = _load_json(RENAMES_PATH)
+        renames = _load_state(RENAMES_STATE_KEY)
         gid = str(ctx.guild.id)
         uid = str(member.id)
         existing = renames.get(gid, {}).get(uid)
@@ -209,7 +204,7 @@ class EconomyExtras(commands.Cog):
             return await ctx.send("❌ I don't have permission to rename that member (role hierarchy).")
 
         save_stats(stats)
-        _save_json(RENAMES_PATH, renames)
+        _save_state(RENAMES_STATE_KEY, renames)
 
         await ctx.send(
             f"✏️ {member.mention} renamed to **{discord.utils.escape_markdown(new_nick)}** for 24h. "
@@ -220,7 +215,7 @@ class EconomyExtras(commands.Cog):
     @commands.has_permissions(manage_nicknames=True)
     async def unrename(self, ctx: commands.Context, member: discord.Member):
         """Admin: revert le pseudo d'un membre si un rename est actif/expiré."""
-        renames = _load_json(RENAMES_PATH)
+        renames = _load_state(RENAMES_STATE_KEY)
         gid = str(ctx.guild.id)
         uid = str(member.id)
         data = renames.get(gid, {}).get(uid)
@@ -236,14 +231,14 @@ class EconomyExtras(commands.Cog):
         del renames[gid][uid]
         if not renames[gid]:
             del renames[gid]
-        _save_json(RENAMES_PATH, renames)
+        _save_state(RENAMES_STATE_KEY, renames)
         await ctx.send(f"↩️ Restored nickname for {member.mention}.")
 
     # ---------------- RENAME SWEEPER ----------------
     @tasks.loop(minutes=30)
     async def rename_sweeper(self):
         await self.bot.wait_until_ready()
-        renames = _load_json(RENAMES_PATH)
+        renames = _load_state(RENAMES_STATE_KEY)
         if not renames:
             return
         now_ts = datetime.utcnow().timestamp()
@@ -272,7 +267,7 @@ class EconomyExtras(commands.Cog):
                 del renames[gid]
 
         if dirty:
-            _save_json(RENAMES_PATH, renames)
+            _save_state(RENAMES_STATE_KEY, renames)
 
     @rename_sweeper.before_loop
     async def before_rename_sweeper(self):

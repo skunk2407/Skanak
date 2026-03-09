@@ -46,8 +46,8 @@ class WelcomeCommand(commands.Cog):
 
         embed.set_footer(text=f"User: {member.name} • {member.joined_at.strftime('%d/%m/%Y %H:%M')}")
 
-        # Select a random background
-        background_folder = "/home/container/Skanak/welcome/"
+        # Select a random background (relative to this file)
+        background_folder = os.path.dirname(__file__)
         backgrounds = [f for f in os.listdir(background_folder) if f.startswith("background") and f.endswith(".jpg")]
 
         if backgrounds:
