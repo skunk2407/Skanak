@@ -6,7 +6,8 @@ WORK_TIERS = [
     ("work_bronze", 1),
     ("work_silver", 25),
     ("work_gold", 50),
-    ("work_diamond", 100),
+    ("work_diamand", 75),
+    ("work_red", 100),
 ]
 
 
@@ -58,7 +59,7 @@ WORK_BRONZE = WorkTierBadge(
     description="Used `!work` for the first time.",
     threshold=1,
     replaces=[],
-    blocked_by=["work_silver", "work_gold", "work_diamond"],
+    blocked_by=["work_silver", "work_gold", "work_diamand", "work_red"],
 )
 
 WORK_SILVER = WorkTierBadge(
@@ -67,7 +68,7 @@ WORK_SILVER = WorkTierBadge(
     description="Reached 25 uses of `!work`.",
     threshold=25,
     replaces=["work_bronze"],
-    blocked_by=["work_gold", "work_diamond"],
+    blocked_by=["work_gold", "work_diamand", "work_red"],
 )
 
 WORK_GOLD = WorkTierBadge(
@@ -76,14 +77,23 @@ WORK_GOLD = WorkTierBadge(
     description="Reached 50 uses of `!work`.",
     threshold=50,
     replaces=["work_bronze", "work_silver"],
-    blocked_by=["work_diamond"],
+    blocked_by=["work_diamand", "work_red"],
 )
 
-WORK_DIAMOND = WorkTierBadge(
-    key="work_diamond",
-    name="Work Diamond",
+WORK_DIAMAND = WorkTierBadge(
+    key="work_diamand",
+    name="Work Diamand",
+    description="Reached 75 uses of `!work`.",
+    threshold=75,
+    replaces=["work_bronze", "work_silver", "work_gold"],
+    blocked_by=["work_red"],
+)
+
+WORK_RED = WorkTierBadge(
+    key="work_red",
+    name="Work Rouge",
     description="Reached 100 uses of `!work`.",
     threshold=100,
-    replaces=["work_bronze", "work_silver", "work_gold"],
+    replaces=["work_bronze", "work_silver", "work_gold", "work_diamand"],
     blocked_by=[],
 )

@@ -4,13 +4,14 @@ import discord
 
 from .base import grant_badge
 from .catalog import BADGES as CATALOG
-from .work_progression import WORK_BRONZE, WORK_DIAMOND, WORK_GOLD, WORK_SILVER
+from .work_progression import WORK_BRONZE, WORK_DIAMAND, WORK_GOLD, WORK_RED, WORK_SILVER
 
 REGISTRY = {
     WORK_BRONZE.key: WORK_BRONZE,
     WORK_SILVER.key: WORK_SILVER,
     WORK_GOLD.key: WORK_GOLD,
-    WORK_DIAMOND.key: WORK_DIAMOND,
+    WORK_DIAMAND.key: WORK_DIAMAND,
+    WORK_RED.key: WORK_RED,
 }
 
 BADGES = CATALOG
@@ -18,6 +19,10 @@ BADGES = CATALOG
 
 def _clean_badges(user_state: dict) -> bool:
     badges = user_state.setdefault("badges", [])
+    if "work_diamond" in badges and "work_diamand" not in badges:
+        badges = ["work_diamand" if key == "work_diamond" else key for key in badges]
+        user_state["badges"] = badges
+
     cleaned = []
     seen = set()
     for key in badges:
@@ -25,7 +30,7 @@ def _clean_badges(user_state: dict) -> bool:
             cleaned.append(key)
             seen.add(key)
 
-    work_keys = ["work_bronze", "work_silver", "work_gold", "work_diamond"]
+    work_keys = ["work_bronze", "work_silver", "work_gold", "work_diamand", "work_red"]
     highest_work = None
     for key in work_keys:
         if key in cleaned:

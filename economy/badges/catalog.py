@@ -14,8 +14,13 @@ BADGES = {
         "description": "Use `!work` 50 times.",
         "url": "",
     },
-    "work_diamond": {
-        "name": "Work Diamond",
+    "work_diamand": {
+        "name": "Work Diamand",
+        "description": "Use `!work` 75 times.",
+        "url": "",
+    },
+    "work_red": {
+        "name": "Work Rouge",
         "description": "Use `!work` 100 times.",
         "url": "",
     },
