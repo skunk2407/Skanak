@@ -1,6 +1,7 @@
 import os
+import re
 from io import BytesIO
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import discord
 from discord.ext import commands
@@ -13,18 +14,68 @@ BASE_DIR = os.path.dirname(__file__)
 BADGES_DIR = os.path.join(BASE_DIR, "badges", "images", "badges_logo")
 PROJECT_DIR = os.path.dirname(BASE_DIR)
 PROFILE_CARD_DIR = os.path.join(PROJECT_DIR, "data", "profile_cards")
-BADGE_GUIDE_PER_PAGE = 6
+BADGE_GUIDE_PER_PAGE = 4
 UNLOCKED_BADGES_PER_PAGE = 8
+FAMILY_ORDER = ["work", "share", "daily", "item"]
+FAMILY_LABELS = {
+    "work": "Work Badges",
+    "share": "Share Badges",
+    "daily": "Daily Badges",
+    "item": "Shop Item Badges",
+}
+TIER_ORDER = ["bronze", "silver", "gold", "diamand", "red"]
+
+
+def _extract_threshold(description: str) -> Optional[int]:
+    match = re.search(r"(\d+)", description or "")
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _tier_sort_key(badge_key: str, info: dict) -> Tuple[int, int, str]:
+    parts = badge_key.split("_")
+    tier = parts[-1] if parts else badge_key
+    tier_rank = TIER_ORDER.index(tier) if tier in TIER_ORDER else 999
+    threshold = _extract_threshold(info.get("description", "")) or 999999
+    return tier_rank, threshold, badge_key
+
+
+def _group_badges_for_guide(badge_items: List[Tuple[str, dict]]) -> List[Tuple[str, List[Tuple[str, dict]]]]:
+    grouped: Dict[str, List[Tuple[str, dict]]] = {}
+    for key, info in badge_items:
+        family = key.split("_")[0] if "_" in key else "other"
+        grouped.setdefault(family, []).append((key, info))
+
+    def family_sort_key(family: str) -> Tuple[int, str]:
+        if family in FAMILY_ORDER:
+            return FAMILY_ORDER.index(family), family
+        return 999, family
+
+    ordered_families = sorted(grouped.keys(), key=family_sort_key)
+    grouped_list: List[Tuple[str, List[Tuple[str, dict]]]] = []
+    for family in ordered_families:
+        entries = sorted(grouped[family], key=lambda x: _tier_sort_key(x[0], x[1]))
+        grouped_list.append((family, entries))
+    return grouped_list
 
 
 class BadgeGuidePaginationView(discord.ui.View):
-    def __init__(self, author_id: int, badge_items: List[Tuple[str, dict]], page_size: int = BADGE_GUIDE_PER_PAGE):
+    def __init__(
+        self,
+        author_id: int,
+        grouped_badges: List[Tuple[str, List[Tuple[str, dict]]]],
+        page_size: int = BADGE_GUIDE_PER_PAGE,
+    ):
         super().__init__(timeout=180)
         self.author_id = author_id
-        self.badge_items = badge_items
+        self.grouped_badges = grouped_badges
         self.page_size = page_size
         self.current_page = 0
-        self.total_pages = max(1, (len(badge_items) + page_size - 1) // page_size)
+        self.total_pages = max(1, (len(grouped_badges) + page_size - 1) // page_size)
         self.message: Optional[discord.Message] = None
         self._refresh_buttons()
 
@@ -35,21 +86,30 @@ class BadgeGuidePaginationView(discord.ui.View):
     def _current_slice(self):
         start = self.current_page * self.page_size
         end = start + self.page_size
-        return self.badge_items[start:end]
+        return self.grouped_badges[start:end]
 
     def build_embed(self):
         embed = discord.Embed(
-            title="Badge Guide",
-            description="How to unlock each badge:",
+            title="Badge Progression Guide",
+            description="Badges are grouped by system. You keep only the highest tier in each system.",
             color=discord.Color.blue(),
         )
-        for _, info in self._current_slice():
+        for family, entries in self._current_slice():
+            family_label = FAMILY_LABELS.get(family, family.title())
+            progression_parts = []
+            for key, info in entries:
+                tier = key.split("_")[-1].title()
+                threshold = _extract_threshold(info.get("description", ""))
+                if threshold is None:
+                    progression_parts.append(tier)
+                else:
+                    progression_parts.append(f"{tier} `{threshold}`")
             embed.add_field(
-                name=info.get("name", "Unknown badge"),
-                value=info.get("description", "-"),
+                name=family_label,
+                value=" -> ".join(progression_parts) if progression_parts else "-",
                 inline=False,
             )
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages}")
+        embed.set_footer(text=f"Families page {self.current_page + 1}/{self.total_pages}")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -418,7 +478,8 @@ class ProfileCog(commands.Cog):
         if not badge_items:
             return await ctx.send("No badges configured.")
 
-        view = BadgeGuidePaginationView(ctx.author.id, badge_items)
+        grouped_badges = _group_badges_for_guide(badge_items)
+        view = BadgeGuidePaginationView(ctx.author.id, grouped_badges)
         message = await ctx.send(embed=view.build_embed(), view=view)
         view.message = message
 
