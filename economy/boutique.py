@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 import discord
 from discord.ext import commands
 
+from economy.badges import dispatch_badge_event
 from economy.stats import get_user_stats, load_stats, save_stats
 from storage.database import load_app_state, save_app_state
 
@@ -398,6 +399,7 @@ class Shop(commands.Cog):
 
         save_stats(stats)
         await ctx.send(msg)
+        await dispatch_badge_event("shop", ctx, user_state=user, stats=stats)
 
     @buy.error
     async def buy_error(self, ctx, error):

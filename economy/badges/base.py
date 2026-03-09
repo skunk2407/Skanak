@@ -53,6 +53,9 @@ class Badge:
     def on_steal(self, ctx, thief_state: dict, victim_state: dict, stolen: int, stats: dict) -> bool:
         return False
 
+    def on_shop(self, ctx, user_state: dict, stats: dict) -> bool:
+        return False
+
     def award(self, user_id: int) -> bool:
         return grant_badge(user_id, self.key)
 
@@ -93,4 +96,6 @@ class Badge:
                 kwargs.get("stolen", 0),
                 stats,
             )
+        if event == "shop":
+            return self.on_shop(ctx, kwargs.get("user_state", {}), stats)
         return False

@@ -74,4 +74,29 @@ BADGES = {
         "description": "Use `!daily` 100 times.",
         "url": "",
     },
+    "item_bronze": {
+        "name": "Item Bronze",
+        "description": "Buy 1 item from `!shop`.",
+        "url": "",
+    },
+    "item_silver": {
+        "name": "Item Silver",
+        "description": "Buy 25 items from `!shop`.",
+        "url": "",
+    },
+    "item_gold": {
+        "name": "Item Gold",
+        "description": "Buy 50 items from `!shop`.",
+        "url": "",
+    },
+    "item_diamand": {
+        "name": "Item Diamand",
+        "description": "Buy 75 items from `!shop`.",
+        "url": "",
+    },
+    "item_red": {
+        "name": "Item Rouge",
+        "description": "Buy 100 items from `!shop`.",
+        "url": "",
+    },
 }
