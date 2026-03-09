@@ -210,27 +210,58 @@ class ProfileCog(commands.Cog):
         w, h = img.size
         for y in range(h):
             t = y / max(1, h - 1)
-            r = int(16 + (26 - 16) * t)
-            g = int(24 + (38 - 24) * t)
-            b = int(36 + (58 - 36) * t)
+            r = int(28 + (98 - 28) * t)
+            g = int(18 + (42 - 18) * t)
+            b = int(30 + (72 - 30) * t)
             draw.line([(0, y), (w, y)], fill=(r, g, b, 255))
 
+    def _draw_cheese_icon(self, draw: ImageDraw.ImageDraw, x: int, y: int, scale: int = 1):
+        w = 40 * scale
+        h = 28 * scale
+        color_main = (255, 206, 89, 255)
+        color_shadow = (230, 156, 52, 255)
+        draw.polygon(
+            [
+                (x, y + h),
+                (x + int(0.15 * w), y + int(0.15 * h)),
+                (x + w, y + int(0.05 * h)),
+                (x + int(0.85 * w), y + h),
+            ],
+            fill=color_main,
+            outline=color_shadow,
+        )
+        holes = [
+            (int(0.25 * w), int(0.35 * h), int(0.12 * w)),
+            (int(0.58 * w), int(0.42 * h), int(0.10 * w)),
+            (int(0.48 * w), int(0.70 * h), int(0.08 * w)),
+        ]
+        for hx, hy, hr in holes:
+            draw.ellipse((x + hx - hr, y + hy - hr, x + hx + hr, y + hy + hr), fill=(245, 170, 70, 255))
+
     async def build_profile_card(self, member: discord.Member, entry: dict, badge_keys: List[str]) -> Optional[str]:
-        width, height = 1100, 640
+        # Tall card so Discord renders it bigger in chat.
+        width, height = 900, 980
         card = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         self._draw_gradient(card)
         draw = ImageDraw.Draw(card)
 
-        # Main panel
-        draw.rounded_rectangle((28, 24, width - 28, height - 24), radius=24, fill=(20, 31, 46, 245))
-        draw.rounded_rectangle((42, 38, width - 42, height - 38), radius=18, outline=(75, 214, 138, 255), width=3)
+        # Main panel and header bar
+        draw.rounded_rectangle((26, 24, width - 26, height - 24), radius=28, fill=(23, 27, 40, 242))
+        draw.rounded_rectangle((44, 42, width - 44, height - 42), radius=22, fill=(32, 36, 52, 230))
+        draw.rounded_rectangle((44, 42, width - 44, 280), radius=22, fill=(255, 176, 66, 230))
+        draw.rectangle((44, 160, width - 44, 280), fill=(255, 140, 52, 220))
 
-        title_font = self._load_font(48, bold=True)
-        subtitle_font = self._load_font(23, bold=False)
-        label_font = self._load_font(28, bold=False)
-        value_font = self._load_font(32, bold=True)
-        badge_label_font = self._load_font(24, bold=True)
-        hint_font = self._load_font(20, bold=False)
+        # Decorative cheese icons
+        self._draw_cheese_icon(draw, 700, 86, scale=2)
+        self._draw_cheese_icon(draw, 760, 210, scale=1)
+        self._draw_cheese_icon(draw, 52, 52, scale=1)
+
+        title_font = self._load_font(56, bold=True)
+        subtitle_font = self._load_font(25, bold=False)
+        label_font = self._load_font(30, bold=False)
+        value_font = self._load_font(34, bold=True)
+        badge_label_font = self._load_font(28, bold=True)
+        hint_font = self._load_font(22, bold=False)
 
         # Avatar
         avatar_img = None
@@ -241,70 +272,87 @@ class ProfileCog(commands.Cog):
             avatar_img = None
 
         if avatar_img is not None:
-            self._paste_circular_avatar(card, avatar_img, x=72, y=72, size=190)
-            draw.ellipse((72, 72, 262, 262), outline=(106, 255, 167, 255), width=5)
+            self._paste_circular_avatar(card, avatar_img, x=78, y=74, size=180)
+            draw.ellipse((78, 74, 258, 254), outline=(255, 248, 217, 255), width=6)
 
         # Header text
-        draw.text((300, 86), member.display_name, font=title_font, fill=(243, 248, 255, 255))
-        draw.text((302, 146), "Community Economy Profile", font=subtitle_font, fill=(153, 176, 204, 255))
+        draw.text((280, 82), member.display_name, font=title_font, fill=(34, 26, 20, 255))
+        draw.text((282, 150), "CHEESE ECONOMY PROFILE", font=subtitle_font, fill=(78, 34, 15, 255))
 
         cheese = int(entry.get("cheese", 0))
         max_cheese = int(entry.get("max_cheese", cheese))
         purchases = int(entry.get("shop_purchases", 0))
         max_gain = int(entry.get("max_work_gain", 0))
 
-        # Stats blocks
+        # Stat cards (2x2)
         stats = [
             ("Cheese Balance", f"{cheese:,}"),
-            ("All-time Max Cheese", f"{max_cheese:,}"),
-            ("Total Items Bought", f"{purchases:,}"),
+            ("All-time Max", f"{max_cheese:,}"),
+            ("Items Bought", f"{purchases:,}"),
             ("Best !work Gain", f"{max_gain:,}"),
         ]
+        stat_boxes = [
+            (70, 320, 410, 430),
+            (490, 320, 830, 430),
+            (70, 455, 410, 565),
+            (490, 455, 830, 565),
+        ]
+        for (label, value), box in zip(stats, stat_boxes):
+            x1, y1, x2, y2 = box
+            draw.rounded_rectangle(box, radius=18, fill=(49, 57, 80, 235), outline=(255, 171, 79, 255), width=3)
+            draw.text((x1 + 20, y1 + 16), label, font=label_font, fill=(227, 233, 245, 255))
+            draw.text((x1 + 20, y1 + 58), value, font=value_font, fill=(255, 219, 120, 255))
 
-        x_label = 78
-        x_value = 500
-        y_start = 302
-        line_gap = 60
-        for idx, (label, value) in enumerate(stats):
-            y = y_start + idx * line_gap
-            draw.text((x_label, y), label, font=label_font, fill=(183, 202, 226, 255))
-            draw.text((x_value, y), value, font=value_font, fill=(255, 221, 130, 255))
-
-        # Badge preview (kept clean on profile card)
-        draw.text((78, 548), "Badge Preview", font=badge_label_font, fill=(231, 240, 252, 255))
+        # Badge preview (clean grid)
+        draw.text((70, 620), "Badge Preview", font=badge_label_font, fill=(255, 233, 177, 255))
         badge_paths = self._existing_badge_images(badge_keys)
-        preview_count = 5
+        preview_count = 8
         shown = badge_paths[:preview_count]
-        badge_x = 330
-        badge_y = 520
-        badge_size = 82
-        badge_gap = 16
+        badge_x = 90
+        badge_y = 664
+        badge_size = 76
+        badge_gap_x = 20
+        badge_gap_y = 18
 
         if shown:
             for i, path in enumerate(shown):
                 try:
                     badge = Image.open(path).convert("RGBA")
                     badge = ImageOps.contain(badge, (badge_size, badge_size), Image.Resampling.LANCZOS)
-                    x = badge_x + i * (badge_size + badge_gap)
-                    card.paste(badge, (x, badge_y), badge)
+                    col = i % 4
+                    row = i // 4
+                    slot_x = badge_x + col * (badge_size + badge_gap_x)
+                    slot_y = badge_y + row * (badge_size + badge_gap_y)
+                    draw.rounded_rectangle(
+                        (slot_x - 8, slot_y - 8, slot_x + badge_size + 8, slot_y + badge_size + 8),
+                        radius=12,
+                        fill=(43, 50, 72, 240),
+                        outline=(255, 186, 84, 255),
+                        width=2,
+                    )
+                    card.paste(badge, (slot_x, slot_y), badge)
                 except Exception:
                     continue
         else:
-            draw.text((330, 548), "No badges unlocked yet.", font=hint_font, fill=(145, 165, 188, 255))
+            draw.text((90, 690), "No badges unlocked yet.", font=hint_font, fill=(172, 186, 208, 255))
 
         remaining = max(0, len(badge_paths) - preview_count)
+        info_x = 520
+        info_y = 700
+        draw.rounded_rectangle((info_x, info_y, 820, 840), radius=18, fill=(46, 54, 77, 240), outline=(131, 215, 255, 255), width=2)
+        draw.text((info_x + 18, info_y + 20), f"Unlocked: {len(badge_paths)}", font=label_font, fill=(226, 235, 251, 255))
         if remaining > 0:
             draw.text(
-                (850, 550),
-                f"+{remaining} more",
+                (info_x + 18, info_y + 60),
+                f"+{remaining} more badges",
                 font=hint_font,
-                fill=(145, 207, 255, 255),
+                fill=(146, 216, 255, 255),
             )
         draw.text(
-            (850, 576),
+            (info_x + 18, info_y + 98),
             "Use !mybadges",
             font=hint_font,
-            fill=(145, 207, 255, 255),
+            fill=(146, 216, 255, 255),
         )
 
         os.makedirs(PROFILE_CARD_DIR, exist_ok=True)
@@ -373,4 +421,3 @@ class ProfileCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ProfileCog(bot))
-
