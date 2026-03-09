@@ -33,10 +33,11 @@ class MyBot(commands.Bot):
             "fun_commands.cheeseboard",
             "fun_commands.help",
             "temp_voice.temp_voice",
-            "meme_sender.meme_sender",
+            # Temporarily disabled during migration/tests:
+            # "meme_sender.meme_sender",
             "economy.economy",
             "economy.boutique",
-            "economy.surprise",
+            # "economy.surprise",
             "economy.profile",
             "purge.purge_ban",
             "economy.slash",
@@ -70,4 +71,3 @@ migrate_stats.migrate()
 print(f"[Storage] SQLite ready at: {DATABASE_PATH}")
 
 bot.run(TOKEN)
-

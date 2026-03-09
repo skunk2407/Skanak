@@ -13,11 +13,12 @@ BASE_DIR = os.path.dirname(__file__)
 BADGES_DIR = os.path.join(BASE_DIR, "badges", "images", "resized")
 SPRITE_DIR = os.path.join(BASE_DIR, "badges", "images", "sprite")
 PROFILE_CARD_DIR = os.path.join(SPRITE_DIR, "profile_cards")
-BADGES_PER_PAGE = 6
+BADGE_GUIDE_PER_PAGE = 6
+UNLOCKED_BADGES_PER_PAGE = 8
 
 
-class BadgePaginationView(discord.ui.View):
-    def __init__(self, author_id: int, badge_items: List[Tuple[str, dict]], page_size: int = BADGES_PER_PAGE):
+class BadgeGuidePaginationView(discord.ui.View):
+    def __init__(self, author_id: int, badge_items: List[Tuple[str, dict]], page_size: int = BADGE_GUIDE_PER_PAGE):
         super().__init__(timeout=180)
         self.author_id = author_id
         self.badge_items = badge_items
@@ -31,15 +32,15 @@ class BadgePaginationView(discord.ui.View):
         self.previous_btn.disabled = self.current_page <= 0
         self.next_btn.disabled = self.current_page >= self.total_pages - 1
 
-    def _current_slice(self) -> List[Tuple[str, dict]]:
+    def _current_slice(self):
         start = self.current_page * self.page_size
         end = start + self.page_size
         return self.badge_items[start:end]
 
-    def build_embed(self) -> discord.Embed:
+    def build_embed(self):
         embed = discord.Embed(
             title="Badge Guide",
-            description="Here is how to unlock each badge:",
+            description="How to unlock each badge:",
             color=discord.Color.blue(),
         )
         for _, info in self._current_slice():
@@ -49,6 +50,87 @@ class BadgePaginationView(discord.ui.View):
                 inline=False,
             )
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages}")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
+    async def previous_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = max(0, self.current_page - 1)
+        self._refresh_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = min(self.total_pages - 1, self.current_page + 1)
+        self._refresh_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+
+class UnlockedBadgesPaginationView(discord.ui.View):
+    def __init__(
+        self,
+        author_id: int,
+        target: discord.Member,
+        unlocked_badges: List[Tuple[str, dict]],
+        page_size: int = UNLOCKED_BADGES_PER_PAGE,
+    ):
+        super().__init__(timeout=180)
+        self.author_id = author_id
+        self.target = target
+        self.unlocked_badges = unlocked_badges
+        self.page_size = page_size
+        self.current_page = 0
+        self.total_pages = max(1, (len(unlocked_badges) + page_size - 1) // page_size)
+        self.message: Optional[discord.Message] = None
+        self._refresh_buttons()
+
+    def _refresh_buttons(self):
+        self.previous_btn.disabled = self.current_page <= 0
+        self.next_btn.disabled = self.current_page >= self.total_pages - 1
+
+    def _current_slice(self):
+        start = self.current_page * self.page_size
+        end = start + self.page_size
+        return self.unlocked_badges[start:end]
+
+    def build_embed(self):
+        embed = discord.Embed(
+            title=f"{self.target.display_name} - Unlocked Badges",
+            color=discord.Color.gold(),
+        )
+        if self.target.avatar:
+            embed.set_thumbnail(url=self.target.avatar.url)
+
+        if not self.unlocked_badges:
+            embed.description = "No badges unlocked yet."
+        else:
+            lines = []
+            for _, info in self._current_slice():
+                name = info.get("name", "Unknown badge")
+                desc = info.get("description", "-")
+                lines.append(f"• **{name}** - {desc}")
+            embed.description = "\n".join(lines)
+
+        embed.set_footer(
+            text=(
+                f"Page {self.current_page + 1}/{self.total_pages} | "
+                f"Total unlocked: {len(self.unlocked_badges)}"
+            )
+        )
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -94,13 +176,20 @@ class ProfileCog(commands.Cog):
     def _load_font(self, size: int, bold: bool = False):
         candidates = []
         if os.name == "nt":
-            if bold:
-                candidates.append("C:/Windows/Fonts/arialbd.ttf")
-            candidates.append("C:/Windows/Fonts/arial.ttf")
+            candidates.extend(
+                [
+                    "C:/Windows/Fonts/segoeuib.ttf" if bold else "C:/Windows/Fonts/segoeui.ttf",
+                    "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
+                ]
+            )
         else:
-            if bold:
-                candidates.append("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-            candidates.append("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            candidates.extend(
+                [
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+                    if bold
+                    else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                ]
+            )
 
         for path in candidates:
             if os.path.isfile(path):
@@ -116,26 +205,32 @@ class ProfileCog(commands.Cog):
         ImageDraw.Draw(mask).ellipse((0, 0, size, size), fill=255)
         card.paste(avatar, (x, y), mask)
 
-    async def build_profile_card(
-        self,
-        member: discord.Member,
-        entry: dict,
-        badge_keys: List[str],
-    ) -> Optional[str]:
-        width, height = 1000, 540
-        card = Image.new("RGBA", (width, height), (18, 24, 33, 255))
+    def _draw_gradient(self, img: Image.Image):
+        draw = ImageDraw.Draw(img)
+        w, h = img.size
+        for y in range(h):
+            t = y / max(1, h - 1)
+            r = int(16 + (26 - 16) * t)
+            g = int(24 + (38 - 24) * t)
+            b = int(36 + (58 - 36) * t)
+            draw.line([(0, y), (w, y)], fill=(r, g, b, 255))
+
+    async def build_profile_card(self, member: discord.Member, entry: dict, badge_keys: List[str]) -> Optional[str]:
+        width, height = 1100, 640
+        card = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        self._draw_gradient(card)
         draw = ImageDraw.Draw(card)
 
-        # Background layers
-        draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=26, fill=(29, 38, 51, 255))
-        draw.rounded_rectangle((36, 36, width - 36, height - 36), radius=22, fill=(35, 47, 63, 255))
-        draw.rectangle((36, 36, 48, height - 36), fill=(72, 187, 120, 255))
+        # Main panel
+        draw.rounded_rectangle((28, 24, width - 28, height - 24), radius=24, fill=(20, 31, 46, 245))
+        draw.rounded_rectangle((42, 38, width - 42, height - 38), radius=18, outline=(75, 214, 138, 255), width=3)
 
-        title_font = self._load_font(46, bold=True)
-        big_font = self._load_font(32, bold=True)
-        label_font = self._load_font(24, bold=False)
-        value_font = self._load_font(27, bold=True)
-        badge_title_font = self._load_font(22, bold=True)
+        title_font = self._load_font(48, bold=True)
+        subtitle_font = self._load_font(23, bold=False)
+        label_font = self._load_font(28, bold=False)
+        value_font = self._load_font(32, bold=True)
+        badge_label_font = self._load_font(24, bold=True)
+        hint_font = self._load_font(20, bold=False)
 
         # Avatar
         avatar_img = None
@@ -146,43 +241,47 @@ class ProfileCog(commands.Cog):
             avatar_img = None
 
         if avatar_img is not None:
-            self._paste_circular_avatar(card, avatar_img, x=70, y=72, size=150)
-            draw.ellipse((70, 72, 220, 222), outline=(94, 234, 140, 255), width=4)
+            self._paste_circular_avatar(card, avatar_img, x=72, y=72, size=190)
+            draw.ellipse((72, 72, 262, 262), outline=(106, 255, 167, 255), width=5)
 
-        # Title block
-        draw.text((250, 78), f"{member.display_name}", font=title_font, fill=(245, 247, 250, 255))
-        draw.text((250, 132), "PLAYER PROFILE", font=label_font, fill=(163, 179, 200, 255))
+        # Header text
+        draw.text((300, 86), member.display_name, font=title_font, fill=(243, 248, 255, 255))
+        draw.text((302, 146), "Community Economy Profile", font=subtitle_font, fill=(153, 176, 204, 255))
 
         cheese = int(entry.get("cheese", 0))
         max_cheese = int(entry.get("max_cheese", cheese))
         purchases = int(entry.get("shop_purchases", 0))
         max_gain = int(entry.get("max_work_gain", 0))
 
-        stats_left = 70
-        stats_top = 258
-        line_gap = 52
-        stat_rows = [
+        # Stats blocks
+        stats = [
             ("Cheese Balance", f"{cheese:,}"),
             ("All-time Max Cheese", f"{max_cheese:,}"),
             ("Total Items Bought", f"{purchases:,}"),
             ("Best !work Gain", f"{max_gain:,}"),
         ]
 
-        for idx, (label, value) in enumerate(stat_rows):
-            y = stats_top + idx * line_gap
-            draw.text((stats_left, y), label, font=label_font, fill=(186, 199, 216, 255))
-            draw.text((430, y), value, font=value_font, fill=(255, 223, 133, 255))
+        x_label = 78
+        x_value = 500
+        y_start = 302
+        line_gap = 60
+        for idx, (label, value) in enumerate(stats):
+            y = y_start + idx * line_gap
+            draw.text((x_label, y), label, font=label_font, fill=(183, 202, 226, 255))
+            draw.text((x_value, y), value, font=value_font, fill=(255, 221, 130, 255))
 
-        # Badges
-        draw.text((70, 470), "Unlocked Badges", font=badge_title_font, fill=(224, 233, 244, 255))
-        badge_paths = self._existing_badge_images(badge_keys)[:8]
+        # Badge preview (kept clean on profile card)
+        draw.text((78, 548), "Badge Preview", font=badge_label_font, fill=(231, 240, 252, 255))
+        badge_paths = self._existing_badge_images(badge_keys)
+        preview_count = 5
+        shown = badge_paths[:preview_count]
         badge_x = 330
-        badge_y = 445
-        badge_size = 64
-        badge_gap = 14
+        badge_y = 520
+        badge_size = 82
+        badge_gap = 16
 
-        if badge_paths:
-            for i, path in enumerate(badge_paths):
+        if shown:
+            for i, path in enumerate(shown):
                 try:
                     badge = Image.open(path).convert("RGBA")
                     badge = ImageOps.contain(badge, (badge_size, badge_size), Image.Resampling.LANCZOS)
@@ -191,12 +290,27 @@ class ProfileCog(commands.Cog):
                 except Exception:
                     continue
         else:
-            draw.text((330, 470), "No badges yet", font=label_font, fill=(150, 160, 174, 255))
+            draw.text((330, 548), "No badges unlocked yet.", font=hint_font, fill=(145, 165, 188, 255))
+
+        remaining = max(0, len(badge_paths) - preview_count)
+        if remaining > 0:
+            draw.text(
+                (850, 550),
+                f"+{remaining} more",
+                font=hint_font,
+                fill=(145, 207, 255, 255),
+            )
+        draw.text(
+            (850, 576),
+            "Use !mybadges",
+            font=hint_font,
+            fill=(145, 207, 255, 255),
+        )
 
         os.makedirs(PROFILE_CARD_DIR, exist_ok=True)
-        out = os.path.join(PROFILE_CARD_DIR, f"{member.id}_profile.png")
-        card.save(out, optimize=True)
-        return out
+        output_path = os.path.join(PROFILE_CARD_DIR, f"{member.id}_profile.png")
+        card.save(output_path, optimize=True)
+        return output_path
 
     @commands.command(name="profile")
     async def profile(self, ctx, member: discord.Member = None):
@@ -205,10 +319,9 @@ class ProfileCog(commands.Cog):
 
         stats = load_stats()
         entry = get_user_stats(stats, member.id)
-        badges = entry.get("badges", [])
-        known_badges = [b for b in badges if b in BADGES]
+        unlocked = [key for key in entry.get("badges", []) if key in BADGES]
 
-        card_path = await self.build_profile_card(member, entry, known_badges)
+        card_path = await self.build_profile_card(member, entry, unlocked)
         if card_path and os.path.isfile(card_path):
             file = discord.File(card_path, filename="profile_card.png")
             embed = discord.Embed(color=discord.Color.green())
@@ -216,7 +329,7 @@ class ProfileCog(commands.Cog):
             await ctx.send(embed=embed, file=file)
             return
 
-        # Fallback (if image generation fails)
+        # Fallback
         purchases = int(entry.get("shop_purchases", 0))
         max_gain = int(entry.get("max_work_gain", 0))
         max_cheese = int(entry.get("max_cheese", entry.get("cheese", 0)))
@@ -227,10 +340,25 @@ class ProfileCog(commands.Cog):
                 f"Cheese Balance: **{entry.get('cheese', 0):,}**\n"
                 f"All-time Max Cheese: **{max_cheese:,}**\n"
                 f"Total Items Bought: **{purchases}**\n"
-                f"Best !work gain: **{max_gain:,}**"
+                f"Best !work gain: **{max_gain:,}**\n"
+                f"Unlocked badges: **{len(unlocked)}** (use `!mybadges`)"
             ),
         )
         await ctx.send(embed=embed)
+
+    @commands.command(name="mybadges", aliases=["profilebadges"])
+    async def mybadges(self, ctx, member: discord.Member = None):
+        if member is None:
+            member = ctx.author
+
+        stats = load_stats()
+        entry = get_user_stats(stats, member.id)
+        unlocked_keys = [key for key in entry.get("badges", []) if key in BADGES]
+        badge_items = [(key, BADGES[key]) for key in unlocked_keys]
+
+        view = UnlockedBadgesPaginationView(ctx.author.id, member, badge_items)
+        message = await ctx.send(embed=view.build_embed(), view=view)
+        view.message = message
 
     @commands.command(name="badges")
     async def badges(self, ctx):
@@ -238,7 +366,7 @@ class ProfileCog(commands.Cog):
         if not badge_items:
             return await ctx.send("No badges configured.")
 
-        view = BadgePaginationView(ctx.author.id, badge_items)
+        view = BadgeGuidePaginationView(ctx.author.id, badge_items)
         message = await ctx.send(embed=view.build_embed(), view=view)
         view.message = message
 
