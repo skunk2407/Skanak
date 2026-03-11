@@ -16,10 +16,11 @@ PROJECT_DIR = os.path.dirname(BASE_DIR)
 PROFILE_CARD_DIR = os.path.join(PROJECT_DIR, "data", "profile_cards")
 BADGE_GUIDE_PER_PAGE = 4
 UNLOCKED_BADGES_PER_PAGE = 8
-FAMILY_ORDER = ["work", "share", "daily", "item"]
+FAMILY_ORDER = ["work", "share", "steal", "daily", "item"]
 FAMILY_LABELS = {
     "work": "Work Badges",
     "share": "Share Badges",
+    "steal": "Steal Badges",
     "daily": "Daily Badges",
     "item": "Shop Item Badges",
 }

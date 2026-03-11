@@ -99,4 +99,29 @@ BADGES = {
         "description": "Buy 100 items from `!shop`.",
         "url": "",
     },
+    "steal_bronze": {
+        "name": "Steal Bronze",
+        "description": "Use `!steal` successfully 1 time.",
+        "url": "",
+    },
+    "steal_silver": {
+        "name": "Steal Silver",
+        "description": "Use `!steal` successfully 25 times.",
+        "url": "",
+    },
+    "steal_gold": {
+        "name": "Steal Gold",
+        "description": "Use `!steal` successfully 50 times.",
+        "url": "",
+    },
+    "steal_diamand": {
+        "name": "Steal Diamand",
+        "description": "Use `!steal` successfully 75 times.",
+        "url": "",
+    },
+    "steal_red": {
+        "name": "Steal Rouge",
+        "description": "Use `!steal` successfully 100 times.",
+        "url": "",
+    },
 }

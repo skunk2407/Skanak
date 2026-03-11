@@ -7,6 +7,7 @@ from .catalog import BADGES as CATALOG
 from .daily_progression import DAILY_BRONZE, DAILY_DIAMAND, DAILY_GOLD, DAILY_RED, DAILY_SILVER
 from .items_progression import ITEM_BRONZE, ITEM_DIAMAND, ITEM_GOLD, ITEM_RED, ITEM_SILVER
 from .share_progression import SHARE_BRONZE, SHARE_DIAMAND, SHARE_GOLD, SHARE_RED, SHARE_SILVER
+from .steal_progression import STEAL_BRONZE, STEAL_DIAMAND, STEAL_GOLD, STEAL_RED, STEAL_SILVER
 from .work_progression import WORK_BRONZE, WORK_DIAMAND, WORK_GOLD, WORK_RED, WORK_SILVER
 
 REGISTRY = {
@@ -30,6 +31,11 @@ REGISTRY = {
     ITEM_GOLD.key: ITEM_GOLD,
     ITEM_DIAMAND.key: ITEM_DIAMAND,
     ITEM_RED.key: ITEM_RED,
+    STEAL_BRONZE.key: STEAL_BRONZE,
+    STEAL_SILVER.key: STEAL_SILVER,
+    STEAL_GOLD.key: STEAL_GOLD,
+    STEAL_DIAMAND.key: STEAL_DIAMAND,
+    STEAL_RED.key: STEAL_RED,
 }
 
 BADGES = CATALOG
@@ -48,6 +54,9 @@ def _clean_badges(user_state: dict) -> bool:
         user_state["badges"] = badges
     if "item_diamond" in badges and "item_diamand" not in badges:
         badges = ["item_diamand" if key == "item_diamond" else key for key in badges]
+        user_state["badges"] = badges
+    if "steal_diamond" in badges and "steal_diamand" not in badges:
+        badges = ["steal_diamand" if key == "steal_diamond" else key for key in badges]
         user_state["badges"] = badges
 
     cleaned = []
@@ -92,6 +101,15 @@ def _clean_badges(user_state: dict) -> bool:
     if highest_item:
         cleaned = [key for key in cleaned if key not in item_keys]
         cleaned.append(highest_item)
+
+    steal_keys = ["steal_bronze", "steal_silver", "steal_gold", "steal_diamand", "steal_red"]
+    highest_steal = None
+    for key in steal_keys:
+        if key in cleaned:
+            highest_steal = key
+    if highest_steal:
+        cleaned = [key for key in cleaned if key not in steal_keys]
+        cleaned.append(highest_steal)
 
     changed = cleaned != badges
     if changed:

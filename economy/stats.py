@@ -20,6 +20,7 @@ DEFAULT_USER: Dict = {
     "spent_in_shop": False,
     "total_shared": 0,
     "share_count": 0,
+    "steal_count": 0,
     "total_earned": 0,
     "total_stolen": 0,
     "theft_victims": [],
