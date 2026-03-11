@@ -39,7 +39,6 @@ class MyBot(commands.Bot):
             "economy.boutique",
             # "economy.surprise",
             "economy.profile",
-            "purge.purge_ban",
             "economy.slash",
             "economy.extras",
             "logs.mod_logs",
