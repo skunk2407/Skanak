@@ -124,4 +124,29 @@ BADGES = {
         "description": "Use `!steal` successfully 100 times.",
         "url": "",
     },
+    "earned_bronze": {
+        "name": "Total Cheese Bronze",
+        "description": "Reach 10000 total cheese earned.",
+        "url": "",
+    },
+    "earned_silver": {
+        "name": "Total Cheese Silver",
+        "description": "Reach 50000 total cheese earned.",
+        "url": "",
+    },
+    "earned_gold": {
+        "name": "Total Cheese Gold",
+        "description": "Reach 100000 total cheese earned.",
+        "url": "",
+    },
+    "earned_blue": {
+        "name": "Total Cheese Blue",
+        "description": "Reach 250000 total cheese earned.",
+        "url": "",
+    },
+    "earned_red": {
+        "name": "Total Cheese Rouge",
+        "description": "Reach 750000 total cheese earned.",
+        "url": "",
+    },
 }

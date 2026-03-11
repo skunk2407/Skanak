@@ -266,6 +266,7 @@ class Economy(commands.Cog):
             thief['cheese'] += stolen
             thief['cheese_since_last_spend'] = thief.get('cheese_since_last_spend', 0) + stolen
             thief['total_stolen'] = thief.get('total_stolen', 0) + stolen
+            thief['total_earned'] = int(thief.get('total_earned', 0)) + stolen
             thief['steal_count'] = int(thief.get('steal_count', 0)) + 1
 
             tv = thief.get('theft_victims', [])

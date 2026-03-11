@@ -5,6 +5,7 @@ import discord
 from .base import grant_badge
 from .catalog import BADGES as CATALOG
 from .daily_progression import DAILY_BRONZE, DAILY_DIAMAND, DAILY_GOLD, DAILY_RED, DAILY_SILVER
+from .earned_progression import EARNED_BLUE, EARNED_BRONZE, EARNED_GOLD, EARNED_RED, EARNED_SILVER
 from .items_progression import ITEM_BRONZE, ITEM_DIAMAND, ITEM_GOLD, ITEM_RED, ITEM_SILVER
 from .share_progression import SHARE_BRONZE, SHARE_DIAMAND, SHARE_GOLD, SHARE_RED, SHARE_SILVER
 from .steal_progression import STEAL_BRONZE, STEAL_DIAMAND, STEAL_GOLD, STEAL_RED, STEAL_SILVER
@@ -36,6 +37,11 @@ REGISTRY = {
     STEAL_GOLD.key: STEAL_GOLD,
     STEAL_DIAMAND.key: STEAL_DIAMAND,
     STEAL_RED.key: STEAL_RED,
+    EARNED_BRONZE.key: EARNED_BRONZE,
+    EARNED_SILVER.key: EARNED_SILVER,
+    EARNED_GOLD.key: EARNED_GOLD,
+    EARNED_BLUE.key: EARNED_BLUE,
+    EARNED_RED.key: EARNED_RED,
 }
 
 BADGES = CATALOG
@@ -110,6 +116,15 @@ def _clean_badges(user_state: dict) -> bool:
     if highest_steal:
         cleaned = [key for key in cleaned if key not in steal_keys]
         cleaned.append(highest_steal)
+
+    earned_keys = ["earned_bronze", "earned_silver", "earned_gold", "earned_blue", "earned_red"]
+    highest_earned = None
+    for key in earned_keys:
+        if key in cleaned:
+            highest_earned = key
+    if highest_earned:
+        cleaned = [key for key in cleaned if key not in earned_keys]
+        cleaned.append(highest_earned)
 
     changed = cleaned != badges
     if changed:

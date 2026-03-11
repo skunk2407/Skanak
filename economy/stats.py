@@ -65,4 +65,10 @@ def get_user_stats(stats: Dict, user_id: int) -> Dict:
             if key not in user:
                 user[key] = default if not isinstance(default, list) else list(default)
         user["max_cheese"] = max(int(user.get("max_cheese", 0) or 0), int(user.get("cheese", 0) or 0))
+        # Keep total_earned consistent for older profiles that predate this stat.
+        user["total_earned"] = max(
+            int(user.get("total_earned", 0) or 0),
+            int(user.get("max_cheese", 0) or 0),
+            int(user.get("cheese", 0) or 0),
+        )
     return stats[uid]
