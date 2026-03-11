@@ -26,6 +26,7 @@ class MyBot(commands.Bot):
     async def setup_hook(self):
         initial_extensions = [
             "application.application",
+            "application.suggestions",
             "events.event",
             "welcome.welcome",
             "counting.counting",
