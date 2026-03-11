@@ -34,7 +34,7 @@ class Economy(commands.Cog):
         self.bot = bot
 
     # --------- Commands ----------
-    @commands.command(name='work')
+    @commands.command(name='work', aliases=['wo'])
     async def work(self, ctx):
         stats = load_stats()
         user = get_user_stats(stats, ctx.author.id)
@@ -81,7 +81,7 @@ class Economy(commands.Cog):
         # Badges (work)
         await dispatch_badge_event("work", ctx, user_state=user, stats=stats)
 
-    @commands.command(name='daily')
+    @commands.command(name='daily', aliases=['da'])
     async def daily(self, ctx):
         stats = load_stats()
         user = get_user_stats(stats, ctx.author.id)
