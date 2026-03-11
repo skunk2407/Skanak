@@ -27,7 +27,6 @@ class MyBot(commands.Bot):
         initial_extensions = [
             "application.application",
             "application.suggestions",
-            "events.event",
             "welcome.welcome",
             "counting.counting",
             "fun_commands.commands",
