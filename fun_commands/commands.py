@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 from economy.stats import get_user_stats, load_stats, save_stats
 
 CHEESE_ROLE_ID = 1296169417172062259  # CERTIFIED CHEESE ENJOYER role ID
+CHEESE_CERTIFIED_BADGE_KEY = "cheese_certified"
 
 
 class FunCommands(commands.Cog):
@@ -33,30 +34,65 @@ class FunCommands(commands.Cog):
     async def before_daily(self):
         await self.bot.wait_until_ready()
 
+    @staticmethod
+    def _grant_cheese_certified_badge(entry: dict) -> bool:
+        badges = entry.setdefault("badges", [])
+        if CHEESE_CERTIFIED_BADGE_KEY in badges:
+            return False
+        # Legacy key compatibility from old JSON data.
+        if "certified" in badges:
+            badges.remove("certified")
+        badges.append(CHEESE_CERTIFIED_BADGE_KEY)
+        return True
+
     @commands.command(
         name="cheese",
         aliases=["fromage", "치즈", "奶酪", "käse", "juusto", "ost", "チーズ", "ser", "جبن", "keju", "पनीर", "queso"],
     )
     async def cheese(self, ctx):
-        """Roll for the Certified Cheese Enjoyer role!"""
+        """Roll for the Certified Cheese Enjoyer role."""
         drop_chance = random.randint(1, 1000)  # 0.1% chance
         stats = load_stats()
         entry = get_user_stats(stats, ctx.author.id)
         role = ctx.guild.get_role(CHEESE_ROLE_ID)
+        changed = False
+
+        if role and role in ctx.author.roles and self._grant_cheese_certified_badge(entry):
+            changed = True
 
         if drop_chance == 1:
             if role and role not in ctx.author.roles:
                 await ctx.author.add_roles(role)
                 if CHEESE_ROLE_ID not in entry["roles"]:
                     entry["roles"].append(CHEESE_ROLE_ID)
+                if self._grant_cheese_certified_badge(entry):
+                    changed = True
+                changed = True
                 save_stats(stats)
                 await ctx.send(
-                    f"🎉 Congrats {ctx.author.mention}, you're now a **CERTIFIED CHEESE ENJOYER**!"
-                    " You now earn 50 cheese per day automatically."
+                    f"Congrats {ctx.author.mention}, you're now a **CERTIFIED CHEESE ENJOYER**! "
+                    "You now earn 50 cheese per day automatically.\n"
+                    "Badge unlocked: **Certified Cheese Enjoyer**."
                 )
             else:
-                await ctx.send(f"{ctx.author.mention}, you already have the **CERTIFIED CHEESE ENJOYER** role.")
+                if changed:
+                    save_stats(stats)
+                    await ctx.send(
+                        f"{ctx.author.mention}, you already have the **CERTIFIED CHEESE ENJOYER** role. "
+                        "Badge unlocked: **Certified Cheese Enjoyer**."
+                    )
+                else:
+                    await ctx.send(
+                        f"{ctx.author.mention}, you already have the **CERTIFIED CHEESE ENJOYER** role."
+                    )
         else:
+            if changed:
+                save_stats(stats)
+                await ctx.send(
+                    f"{ctx.author.mention}, role detected: badge **Certified Cheese Enjoyer** unlocked."
+                )
+                return
+
             cheese_responses = [
                 "Who cut the cheese? 🧀",
                 "Say CHEESE! 📸",

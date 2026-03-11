@@ -64,6 +64,9 @@ def _clean_badges(user_state: dict) -> bool:
     if "steal_diamond" in badges and "steal_diamand" not in badges:
         badges = ["steal_diamand" if key == "steal_diamond" else key for key in badges]
         user_state["badges"] = badges
+    if "certified" in badges and "cheese_certified" not in badges:
+        badges = ["cheese_certified" if key == "certified" else key for key in badges]
+        user_state["badges"] = badges
 
     cleaned = []
     seen = set()

@@ -149,4 +149,9 @@ BADGES = {
         "description": "Reach 750000 total cheese earned.",
         "url": "",
     },
+    "cheese_certified": {
+        "name": "Certified Cheese Enjoyer",
+        "description": "Get the rare role drop from `!cheese`.",
+        "url": "",
+    },
 }
