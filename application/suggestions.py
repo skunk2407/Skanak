@@ -40,7 +40,6 @@ def _build_panel_embed() -> discord.Embed:
         description=(
             "Have an idea to improve the regiment or the Discord server?\n"
             "Share your suggestion here so the community can vote and discuss it.\n\n"
-            "Keep it clear, practical, and constructive.\n\n"
             "Use **Submit Suggestion** to show your tag.\n"
             "Use **Submit Anonymous** to hide your identity."
         ),
