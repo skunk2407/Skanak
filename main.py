@@ -33,11 +33,10 @@ class MyBot(commands.Bot):
             "fun_commands.cheeseboard",
             "fun_commands.help",
             "temp_voice.temp_voice",
-            # Temporarily disabled during migration/tests:
-            # "meme_sender.meme_sender",
+            "meme_sender.meme_sender",
             "economy.economy",
             "economy.boutique",
-            # "economy.surprise",
+            "economy.surprise",
             "economy.profile",
             "economy.slash",
             "economy.extras",
