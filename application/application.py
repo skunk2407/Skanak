@@ -30,6 +30,20 @@ def _new_application_id(user_id: int) -> str:
     return f"{user_id}-{int(time.time())}"
 
 
+def _display_vote_label(choice: str) -> str:
+    return "✅ Valid" if choice == "approve" else "❌ Cross"
+
+
+def _display_status(status: str) -> str:
+    if status == "approved":
+        return "✅ Valid"
+    if status == "rejected":
+        return "❌ Cross"
+    if status == "pending_review":
+        return "🛠️ Pending Review"
+    return "⏳ Pending"
+
+
 def _load_applications() -> Dict[str, dict]:
     data = load_app_state(APPLICATION_STATE_KEY, default={})
     return data if isinstance(data, dict) else {}
@@ -54,13 +68,13 @@ def _build_start_view() -> View:
 def _build_vote_view(app_id: str, disabled: bool = False) -> View:
     view = View(timeout=None)
     approve = Button(
-        label="Approve",
+        label="✅ Valid",
         style=discord.ButtonStyle.success,
         custom_id=f"apply:vote:{app_id}:approve",
         disabled=disabled,
     )
     reject = Button(
-        label="Reject",
+        label="❌ Cross",
         style=discord.ButtonStyle.danger,
         custom_id=f"apply:vote:{app_id}:reject",
         disabled=disabled,
@@ -178,7 +192,7 @@ class ApplyCog(commands.Cog):
         embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
         for question, answer in answers.items():
             embed.add_field(name=question, value=answer or "No answer", inline=False)
-        embed.add_field(name="Votes", value="Approve 0 | Reject 0 | Total 0", inline=False)
+        embed.add_field(name="Votes", value="✅ Valid 0 | ❌ Cross 0 | Total 0", inline=False)
         embed.add_field(
             name="Decision Rules",
             value=f"Closes after {VOTE_DURATION_HOURS}h. Minimum {MIN_TOTAL_VOTES} total votes required.",
@@ -236,9 +250,9 @@ class ApplyCog(commands.Cog):
 
         embed = message.embeds[0] if message.embeds else discord.Embed(title="Application")
         approve_count, reject_count, total = self._count_votes(app)
-        status = str(app.get("status", "pending")).replace("_", " ").title()
+        status = _display_status(str(app.get("status", "pending")))
 
-        votes_line = f"Approve {approve_count} | Reject {reject_count} | Total {total}"
+        votes_line = f"✅ Valid {approve_count} | ❌ Cross {reject_count} | Total {total}"
         decision_line = f"Status: **{status}**"
         if app.get("result_reason"):
             decision_line += f"\nReason: {app['result_reason']}"
@@ -268,7 +282,7 @@ class ApplyCog(commands.Cog):
         except discord.HTTPException:
             return
 
-        status = str(app.get("status", "pending")).replace("_", " ").title()
+        status = _display_status(str(app.get("status", "pending")))
         reason = app.get("result_reason", "")
         description = f"Your application status: **{status}**"
         if reason:
@@ -296,10 +310,10 @@ class ApplyCog(commands.Cog):
             app["result_reason"] = f"Not enough votes ({total}/{MIN_TOTAL_VOTES})."
         elif approve_count > reject_count:
             app["status"] = "approved"
-            app["result_reason"] = "Community majority approved."
+            app["result_reason"] = "Community majority voted valid."
         elif reject_count > approve_count:
             app["status"] = "rejected"
-            app["result_reason"] = "Community majority rejected."
+            app["result_reason"] = "Community majority voted cross."
         else:
             app["status"] = "pending_review"
             app["result_reason"] = "Tie vote. Manual follow-up required."
@@ -382,7 +396,7 @@ class ApplyCog(commands.Cog):
         await self._update_vote_message(app_id, app)
 
         await interaction.response.send_message(
-            f"🗳️ Vote recorded: **{choice.capitalize()}**. You can change it until the deadline.",
+            f"🗳️ Vote recorded: **{_display_vote_label(choice)}**. You can change it until the deadline.",
             ephemeral=True,
         )
 
