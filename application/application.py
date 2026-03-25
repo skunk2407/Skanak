@@ -88,20 +88,20 @@ class ApplicationModal(Modal, title="Community Application"):
             required=True,
         )
         self.setup = TextInput(
-            label="Are you a console player? Do you use any soundboard?",
-            placeholder="Explain your setup in your own words.",
+            label="Console player? Soundboard?",
+            placeholder="Are you a console player? Do you use any soundboard?",
             max_length=100,
             required=True,
         )
         self.gameplay = TextInput(
-            label="What is your favorite class and your average kills per round?",
-            placeholder="Tell us about your playstyle.",
+            label="Favorite class and kills/round?",
+            placeholder="What is your favorite class and your average kills per round?",
             max_length=150,
             required=True,
         )
         self.background = TextInput(
-            label="How many hours do you have? What was your old regiment if you had one? Do you play regularly?",
-            placeholder="Share anything useful about your playtime and background.",
+            label="Hours, old regiment, regular player?",
+            placeholder="How many hours do you have? What was your old regiment if you had one? Do you play regularly?",
             style=discord.TextStyle.paragraph,
             max_length=300,
             required=True,
