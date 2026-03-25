@@ -5,8 +5,10 @@ from storage.database import load_all_user_stats, save_user_stats
 # Default schema for an economy user profile
 DEFAULT_USER: Dict = {
     "cheese": 0,
+    "cheese_since_last_spend": 0,
     "last_work": None,
     "last_daily": None,
+    "last_steal_time": 0.0,
     "daily_count": 0,
     "daily_streak": 0,
     "safe_mode_expiry": 0,
@@ -14,6 +16,8 @@ DEFAULT_USER: Dict = {
     "next_work_multiplier": 1.0,
     "next_daily_multiplier": 1.0,
     "steal_boost": 0.0,
+    "trap_cheese_charges": 0,
+    "counter_steal_charges": 0,
     "roles": [],
     "badges": [],
     "shop_purchases": 0,

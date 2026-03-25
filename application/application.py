@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Dict
 
 import discord
 from discord.ext import commands, tasks
@@ -40,7 +40,7 @@ def _save_applications(data: Dict[str, dict]) -> None:
 
 
 def _build_start_view() -> View:
-    view = View(timeout=180)
+    view = View(timeout=None)
     view.add_item(
         Button(
             label="Start Application",
@@ -81,44 +81,44 @@ class ApplicationModal(Modal, title="Community Application"):
             max_length=500,
             required=True,
         )
-        self.regiment = TextInput(
-            label="Previous regiment (if any)",
-            placeholder="Write 'None' if you were never in one.",
-            max_length=120,
-            required=True,
-        )
-        self.hours = TextInput(
-            label="How many hours have you played?",
-            placeholder="Example: 180",
-            max_length=20,
-            required=True,
-        )
         self.ingame_name = TextInput(
             label="What is your in-game name?",
             placeholder="Your exact in-game name",
             max_length=60,
             required=True,
         )
-        self.community_info = TextInput(
-            label="Community contacts / previous regiment",
-            placeholder="Write names and regiment, or 'None'.",
+        self.setup = TextInput(
+            label="Console player and soundboard?",
+            placeholder="Example: No, Yes",
+            max_length=100,
+            required=True,
+        )
+        self.gameplay = TextInput(
+            label="Favorite class and kills per round?",
+            placeholder="Example: Rifleman, around 4-5 kills",
+            max_length=150,
+            required=True,
+        )
+        self.background = TextInput(
+            label="Hours, regiment, regular player?",
+            placeholder="Example: 250h, None, Yes",
             style=discord.TextStyle.paragraph,
-            max_length=300,
+            max_length=200,
             required=True,
         )
         self.add_item(self.reason)
-        self.add_item(self.regiment)
-        self.add_item(self.hours)
         self.add_item(self.ingame_name)
-        self.add_item(self.community_info)
+        self.add_item(self.setup)
+        self.add_item(self.gameplay)
+        self.add_item(self.background)
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
         answers = {
             "Why do you want to join?": str(self.reason.value).strip(),
-            "Previous regiment (if any)": str(self.regiment.value).strip(),
-            "How many hours have you played?": str(self.hours.value).strip(),
-            "What is your in-game name?": str(self.ingame_name.value).strip(),
-            "Community contacts / previous regiment details": str(self.community_info.value).strip(),
+            "In-game name": str(self.ingame_name.value).strip(),
+            "Console player? Do you own a soundboard?": str(self.setup.value).strip(),
+            "Favorite class and average kills per round": str(self.gameplay.value).strip(),
+            "Hours played, previous regiment, active player?": str(self.background.value).strip(),
         }
         await self.cog.submit_application(interaction, answers)
 
@@ -128,29 +128,30 @@ class ApplyCog(commands.Cog):
         self.bot = bot
         self.review_pending.start()
 
-    def cog_unload(self):
+    def cog_unload(self) -> None:
         self.review_pending.cancel()
 
     @commands.command(name="apply")
-    async def apply(self, ctx: commands.Context):
-        """Start the community application flow."""
+    async def apply(self, ctx: commands.Context) -> None:
         embed = discord.Embed(
             title="Apply to Join",
             description=(
-                "Click **Start Application** and fill a simple form.\n\n"
-                "**How to send it:**\n"
+                "Click **Start Application** and fill the form.\n\n"
                 "1. Click the button\n"
                 "2. Fill each field\n"
-                "3. Click **Submit** in the modal\n\n"
-                "Your application will be posted in the community voting channel."
+                "3. Submit the modal\n\n"
+                "Your application will then be posted in the community voting channel."
             ),
             color=discord.Color.blurple(),
         )
         await ctx.send(embed=embed, view=_build_start_view())
 
-    async def submit_application(self, interaction: discord.Interaction, answers: Dict[str, str]):
+    async def submit_application(self, interaction: discord.Interaction, answers: Dict[str, str]) -> None:
         if not interaction.guild:
-            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True,
+            )
 
         channel = self.bot.get_channel(HOLDFAST_CHANNEL_ID)
         if channel is None:
@@ -169,7 +170,7 @@ class ApplyCog(commands.Cog):
         deadline_ts = int((_now_utc() + timedelta(hours=VOTE_DURATION_HOURS)).timestamp())
 
         embed = discord.Embed(
-            title="📨 New Community Application",
+            title="New Community Application",
             description=f"Applicant: {interaction.user.mention}\nVoting closes: **{_fmt_deadline(deadline_ts)}**",
             color=discord.Color.green(),
             timestamp=_now_utc(),
@@ -177,7 +178,7 @@ class ApplyCog(commands.Cog):
         embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
         for question, answer in answers.items():
             embed.add_field(name=question, value=answer or "No answer", inline=False)
-        embed.add_field(name="Votes", value="✅ 0 | ❌ 0 | Total 0", inline=False)
+        embed.add_field(name="Votes", value="Approve 0 | Reject 0 | Total 0", inline=False)
         embed.add_field(
             name="Decision Rules",
             value=f"Closes after {VOTE_DURATION_HOURS}h. Minimum {MIN_TOTAL_VOTES} total votes required.",
@@ -214,7 +215,7 @@ class ApplyCog(commands.Cog):
         total = len(approves | rejects)
         return len(approves), len(rejects), total
 
-    async def _update_vote_message(self, app_id: str, app: dict, close_view: bool = False):
+    async def _update_vote_message(self, app_id: str, app: dict, close_view: bool = False) -> None:
         channel = self.bot.get_channel(int(app["channel_id"]))
         if channel is None:
             try:
@@ -231,32 +232,30 @@ class ApplyCog(commands.Cog):
 
         embed = message.embeds[0] if message.embeds else discord.Embed(title="Application")
         approve_count, reject_count, total = self._count_votes(app)
-        status = app.get("status", "pending")
+        status = str(app.get("status", "pending")).replace("_", " ").title()
 
-        votes_line = f"✅ {approve_count} | ❌ {reject_count} | Total {total}"
-        decision_line = f"Status: **{status.upper()}**"
+        votes_line = f"Approve {approve_count} | Reject {reject_count} | Total {total}"
+        decision_line = f"Status: **{status}**"
         if app.get("result_reason"):
             decision_line += f"\nReason: {app['result_reason']}"
 
-        # Update or add fields in place
         found_votes = False
         found_decision = False
-        for i, field in enumerate(embed.fields):
+        for index, field in enumerate(embed.fields):
             if field.name == "Votes":
-                embed.set_field_at(i, name="Votes", value=votes_line, inline=False)
+                embed.set_field_at(index, name="Votes", value=votes_line, inline=False)
                 found_votes = True
             if field.name == "Decision":
-                embed.set_field_at(i, name="Decision", value=decision_line, inline=False)
+                embed.set_field_at(index, name="Decision", value=decision_line, inline=False)
                 found_decision = True
         if not found_votes:
             embed.add_field(name="Votes", value=votes_line, inline=False)
         if not found_decision:
             embed.add_field(name="Decision", value=decision_line, inline=False)
 
-        view = _build_vote_view(app_id, disabled=close_view)
-        await message.edit(embed=embed, view=view)
+        await message.edit(embed=embed, view=_build_vote_view(app_id, disabled=close_view))
 
-    async def _dm_result(self, app: dict):
+    async def _dm_result(self, app: dict) -> None:
         applicant_id = int(app.get("applicant_id", 0))
         if not applicant_id:
             return
@@ -265,7 +264,7 @@ class ApplyCog(commands.Cog):
         except discord.HTTPException:
             return
 
-        status = app.get("status", "pending").upper()
+        status = str(app.get("status", "pending")).replace("_", " ").title()
         reason = app.get("result_reason", "")
         description = f"Your application status: **{status}**"
         if reason:
@@ -299,14 +298,14 @@ class ApplyCog(commands.Cog):
             app["result_reason"] = "Community majority rejected."
         else:
             app["status"] = "pending_review"
-            app["result_reason"] = "Tie vote, manual follow-up required."
+            app["result_reason"] = "Tie vote. Manual follow-up required."
 
         await self._update_vote_message(app_id, app, close_view=True)
         await self._dm_result(app)
         return True
 
     @tasks.loop(minutes=1)
-    async def review_pending(self):
+    async def review_pending(self) -> None:
         applications = _load_applications()
         changed = False
         for app_id, app in applications.items():
@@ -315,17 +314,17 @@ class ApplyCog(commands.Cog):
             _save_applications(applications)
 
     @review_pending.before_loop
-    async def before_review_pending(self):
+    async def before_review_pending(self) -> None:
         await self.bot.wait_until_ready()
 
     @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
+    async def on_interaction(self, interaction: discord.Interaction) -> None:
         if interaction.type != discord.InteractionType.component:
             return
 
         data = interaction.data or {}
         custom_id = data.get("custom_id")
-        if not custom_id or not isinstance(custom_id, str):
+        if not isinstance(custom_id, str):
             return
 
         if custom_id == "apply:start":
@@ -384,5 +383,5 @@ class ApplyCog(commands.Cog):
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ApplyCog(bot))

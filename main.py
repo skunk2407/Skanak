@@ -27,10 +27,12 @@ class MyBot(commands.Bot):
         initial_extensions = [
             "application.application",
             "application.suggestions",
+            "birthday.birthday",
             "welcome.welcome",
             "counting.counting",
             "fun_commands.commands",
             "fun_commands.cheeseboard",
+            "fun_commands.blackjack",
             "fun_commands.help",
             "temp_voice.temp_voice",
             "meme_sender.meme_sender",

@@ -88,6 +88,14 @@ MEMBER_HELP_ENTRIES: Dict[str, HelpEntry] = {
         examples=["!steal @Skunk"],
         aliases=[],
     ),
+    "blackjack": HelpEntry(
+        name="blackjack",
+        usage="!blackjack <amount>",
+        description="Play blackjack against the dealer.",
+        section="Economy",
+        examples=["!blackjack 250", "!bj 250"],
+        aliases=["bj"],
+    ),
     "inventory": HelpEntry(
         name="inventory",
         usage="!inventory",
@@ -143,6 +151,14 @@ MEMBER_HELP_ENTRIES: Dict[str, HelpEntry] = {
         section="Community",
         examples=["!cheese"],
         aliases=["fromage", "queso"],
+    ),
+    "birthday": HelpEntry(
+        name="birthday",
+        usage="!birthday",
+        description="Open the birthday setup menu.",
+        section="Community",
+        examples=["!birthday"],
+        aliases=[],
     ),
 }
 
