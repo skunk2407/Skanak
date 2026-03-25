@@ -49,6 +49,12 @@ def _is_valid_day(month: int, day: int) -> bool:
     return 1 <= day <= _days_in_month(month)
 
 
+def _page_start_for_day(day: Optional[int]) -> int:
+    if not day or day <= 25:
+        return 1
+    return ((day - 1) // 25) * 25 + 1
+
+
 class MonthSelect(Select):
     def __init__(self, birthday_view: "BirthdayView"):
         self.birthday_view = birthday_view
@@ -76,10 +82,12 @@ class MonthSelect(Select):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         self.birthday_view.selected_month = int(self.values[0])
+        self.birthday_view.day_page_start = _page_start_for_day(self.birthday_view.selected_day)
         if self.birthday_view.selected_day and not _is_valid_day(
             self.birthday_view.selected_month, self.birthday_view.selected_day
         ):
             self.birthday_view.selected_day = None
+            self.birthday_view.day_page_start = 1
         self.birthday_view.refresh_components()
         await interaction.response.edit_message(content=self.birthday_view.summary(), view=self.birthday_view)
 
@@ -95,15 +103,22 @@ class DaySelect(Select):
             disabled = True
         else:
             max_day = _days_in_month(month)
+            start_day = min(birthday_view.day_page_start, max_day)
+            end_day = min(start_day + 24, max_day)
             options = [
                 discord.SelectOption(
                     label=str(day),
                     value=str(day),
                     default=day == birthday_view.selected_day,
                 )
-                for day in range(1, max_day + 1)
+                for day in range(start_day, end_day + 1)
             ]
-            placeholder = f"Day: {birthday_view.selected_day}" if birthday_view.selected_day else "Choose your day"
+            if birthday_view.selected_day:
+                placeholder = f"Day: {birthday_view.selected_day}"
+            elif start_day == 1 and end_day == max_day:
+                placeholder = "Choose your day"
+            else:
+                placeholder = f"Choose your day ({start_day}-{end_day})"
             disabled = False
 
         super().__init__(
@@ -117,6 +132,37 @@ class DaySelect(Select):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         self.birthday_view.selected_day = int(self.values[0])
+        self.birthday_view.day_page_start = _page_start_for_day(self.birthday_view.selected_day)
+        self.birthday_view.refresh_components()
+        await interaction.response.edit_message(content=self.birthday_view.summary(), view=self.birthday_view)
+
+
+class DayPageButton(Button):
+    def __init__(self, birthday_view: "BirthdayView", *, direction: int):
+        self.birthday_view = birthday_view
+        self.direction = direction
+        month = birthday_view.selected_month
+        disabled = month is None
+
+        if month is not None:
+            max_day = _days_in_month(month)
+            if direction < 0:
+                disabled = birthday_view.day_page_start <= 1
+            else:
+                disabled = birthday_view.day_page_start + 25 > max_day
+
+        label = "Previous Days" if direction < 0 else "Next Days"
+        style = discord.ButtonStyle.secondary
+        super().__init__(label=label, style=style, disabled=disabled, row=2)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        month = self.birthday_view.selected_month
+        if month is None:
+            return await interaction.response.send_message("Choose your month first.", ephemeral=True)
+
+        max_day = _days_in_month(month)
+        new_start = self.birthday_view.day_page_start + (25 * self.direction)
+        self.birthday_view.day_page_start = max(1, min(new_start, _page_start_for_day(max_day)))
         self.birthday_view.refresh_components()
         await interaction.response.edit_message(content=self.birthday_view.summary(), view=self.birthday_view)
 
@@ -125,7 +171,7 @@ class SaveBirthdayButton(Button):
     def __init__(self, birthday_view: "BirthdayView"):
         self.birthday_view = birthday_view
         label = "Update Birthday" if birthday_view.had_existing_birthday else "Save Birthday"
-        super().__init__(label=label, style=discord.ButtonStyle.success, row=2)
+        super().__init__(label=label, style=discord.ButtonStyle.success, row=3)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         month = self.birthday_view.selected_month
@@ -177,6 +223,7 @@ class BirthdayView(View):
         self.user_id = user_id
         self.selected_month = existing_month
         self.selected_day = existing_day
+        self.day_page_start = _page_start_for_day(existing_day)
         self.had_existing_birthday = existing_month is not None and existing_day is not None
         self.refresh_components()
 
@@ -184,16 +231,21 @@ class BirthdayView(View):
         self.clear_items()
         self.add_item(MonthSelect(self))
         self.add_item(DaySelect(self))
+        self.add_item(DayPageButton(self, direction=-1))
+        self.add_item(DayPageButton(self, direction=1))
         self.add_item(SaveBirthdayButton(self))
 
     def summary(self) -> str:
         month_text = _month_name(self.selected_month) if self.selected_month else "not selected"
         day_text = str(self.selected_day) if self.selected_day else "not selected"
-        return (
+        base = (
             "Pick your month, then your day, then click the green button to save.\n"
             "Running `!birthday` again will replace your old birthday.\n\n"
             f"Current selection: **{month_text} {day_text}**"
         )
+        if self.selected_month and _days_in_month(self.selected_month) > 25:
+            base += "\nIf you do not see your day, use **Previous Days** or **Next Days**."
+        return base
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
