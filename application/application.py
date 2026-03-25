@@ -134,7 +134,7 @@ class ApplyCog(commands.Cog):
     @commands.command(name="apply")
     async def apply(self, ctx: commands.Context) -> None:
         embed = discord.Embed(
-            title="Apply to Join",
+            title="📨 Apply to Join",
             description=(
                 "Click **Start Application** and fill the form.\n\n"
                 "1. Click the button\n"
@@ -149,7 +149,7 @@ class ApplyCog(commands.Cog):
     async def submit_application(self, interaction: discord.Interaction, answers: Dict[str, str]) -> None:
         if not interaction.guild:
             return await interaction.response.send_message(
-                "This command can only be used in a server.",
+                "❌ This command can only be used in a server.",
                 ephemeral=True,
             )
 
@@ -162,7 +162,7 @@ class ApplyCog(commands.Cog):
 
         if not isinstance(channel, discord.TextChannel):
             return await interaction.response.send_message(
-                "Application channel is unavailable. Please contact staff.",
+                "⚠️ Application channel is unavailable. Please contact staff.",
                 ephemeral=True,
             )
 
@@ -170,7 +170,7 @@ class ApplyCog(commands.Cog):
         deadline_ts = int((_now_utc() + timedelta(hours=VOTE_DURATION_HOURS)).timestamp())
 
         embed = discord.Embed(
-            title="New Community Application",
+            title="📨 New Community Application",
             description=f"Applicant: {interaction.user.mention}\nVoting closes: **{_fmt_deadline(deadline_ts)}**",
             color=discord.Color.green(),
             timestamp=_now_utc(),
@@ -208,7 +208,7 @@ class ApplyCog(commands.Cog):
         _save_applications(applications)
 
         await interaction.response.send_message(
-            "Your application was submitted successfully. The community can now vote on it.",
+            "✅ Your application was submitted successfully. The community can now vote on it.",
             ephemeral=True,
         )
 
@@ -347,21 +347,21 @@ class ApplyCog(commands.Cog):
         applications = _load_applications()
         app = applications.get(app_id)
         if not app:
-            return await interaction.response.send_message("This application was not found.", ephemeral=True)
+            return await interaction.response.send_message("❌ This application was not found.", ephemeral=True)
 
         if app.get("status") != "pending":
-            return await interaction.response.send_message("Voting is closed for this application.", ephemeral=True)
+            return await interaction.response.send_message("🔒 Voting is closed for this application.", ephemeral=True)
 
         if _ts() >= int(app.get("deadline_ts", 0)):
             await self._finalize_if_due(app_id, app)
             _save_applications(applications)
-            return await interaction.response.send_message("Voting window has closed.", ephemeral=True)
+            return await interaction.response.send_message("⏳ Voting window has closed.", ephemeral=True)
 
         if interaction.user.bot:
-            return await interaction.response.send_message("Bots cannot vote.", ephemeral=True)
+            return await interaction.response.send_message("🤖 Bots cannot vote.", ephemeral=True)
 
         if int(app.get("applicant_id", 0)) == interaction.user.id:
-            return await interaction.response.send_message("You cannot vote on your own application.", ephemeral=True)
+            return await interaction.response.send_message("🙅 You cannot vote on your own application.", ephemeral=True)
 
         votes = app.setdefault("votes", {"approve": [], "reject": []})
         approve_set = set(votes.get("approve", []))
@@ -382,7 +382,7 @@ class ApplyCog(commands.Cog):
         await self._update_vote_message(app_id, app)
 
         await interaction.response.send_message(
-            f"Vote recorded: **{choice.capitalize()}**. You can change it until the deadline.",
+            f"🗳️ Vote recorded: **{choice.capitalize()}**. You can change it until the deadline.",
             ephemeral=True,
         )
 

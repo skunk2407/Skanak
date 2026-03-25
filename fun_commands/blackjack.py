@@ -139,7 +139,7 @@ class BlackjackView(View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.player_id:
-            await interaction.response.send_message("This blackjack game is not yours.", ephemeral=True)
+            await interaction.response.send_message("🎰 This blackjack game is not yours.", ephemeral=True)
             return False
         return True
 
@@ -151,7 +151,7 @@ class BlackjackView(View):
         if self.message:
             try:
                 await self.message.edit(
-                    content=self.cog._build_result_message(game, "Time is up. Dealer plays automatically."),
+                    content=self.cog._build_result_message(game, "⏰ Time is up. Dealer plays automatically."),
                     view=None,
                 )
             except discord.HTTPException:
@@ -162,11 +162,11 @@ class BlackjackView(View):
     async def hit(self, interaction: discord.Interaction, button: Button) -> None:
         game = self.cog.active_games.get(self.game_id)
         if not game:
-            return await interaction.response.send_message("This blackjack game is no longer active.", ephemeral=True)
+            return await interaction.response.send_message("🎰 This blackjack game is no longer active.", ephemeral=True)
 
         if not game.hit_player():
             await interaction.response.edit_message(
-                content=self.cog._build_result_message(game, f"Bust. You lost **{game.bet}** cheese."),
+                content=self.cog._build_result_message(game, f"💥 Bust! You lost **{game.bet}** cheese."),
                 view=None,
             )
             self.cog._finish_game(self.game_id, game)
@@ -179,7 +179,7 @@ class BlackjackView(View):
     async def stand(self, interaction: discord.Interaction, button: Button) -> None:
         game = self.cog.active_games.get(self.game_id)
         if not game:
-            return await interaction.response.send_message("This blackjack game is no longer active.", ephemeral=True)
+            return await interaction.response.send_message("🎰 This blackjack game is no longer active.", ephemeral=True)
 
         game.stand()
         await interaction.response.edit_message(
@@ -210,18 +210,18 @@ class BlackjackCog(commands.Cog):
 
     def _build_result_message(self, game: BlackjackGame, prefix: str = "") -> str:
         result_text = {
-            "win": "You win.",
-            "lose": "Dealer wins.",
-            "push": "Push.",
-            "blackjack": "Blackjack.",
-            "bust": "Bust.",
-        }.get(game.result or "", "Round complete.")
+            "win": "🎉 You win!",
+            "lose": "💀 Dealer wins!",
+            "push": "🤝 Push!",
+            "blackjack": "⭐ Blackjack!",
+            "bust": "💥 Bust!",
+        }.get(game.result or "", "🎰 Round complete.")
         message = game.render()
         if prefix:
             message += f"\n{prefix}"
         else:
             message += f"\n{result_text}"
-        message += f"\nPayout: **{game.payout}** cheese."
+        message += f"\nPayout: **{game.payout}** cheese 🧀"
         return message
 
     @commands.command(name="blackjack", aliases=["bj"])
@@ -230,13 +230,13 @@ class BlackjackCog(commands.Cog):
         user = get_user_stats(stats, ctx.author.id)
 
         if self._find_active_game_id(ctx.author.id):
-            return await ctx.send("You already have an active blackjack game.")
+            return await ctx.send("🎰 You already have an active blackjack game.")
         if bet < MIN_BET:
-            return await ctx.send(f"Minimum bet is {MIN_BET} cheese.")
+            return await ctx.send(f"🎲 Minimum bet is **{MIN_BET}** cheese.")
         if bet > MAX_BET:
-            return await ctx.send(f"Maximum bet is {MAX_BET} cheese.")
+            return await ctx.send(f"🚫 Maximum bet is **{MAX_BET}** cheese.")
         if user["cheese"] < bet:
-            return await ctx.send("You do not have enough cheese.")
+            return await ctx.send("🫠 You do not have enough cheese.")
 
         user["cheese"] -= bet
         save_stats(stats)
@@ -247,11 +247,11 @@ class BlackjackCog(commands.Cog):
 
         if game.check_blackjack():
             if game.result == "blackjack":
-                message = self._build_result_message(game, "Blackjack. You win instantly.")
+                message = self._build_result_message(game, "⭐ Blackjack! You win instantly.")
             elif game.result == "push":
-                message = self._build_result_message(game, "Both sides have blackjack.")
+                message = self._build_result_message(game, "🤝 Both sides have blackjack.")
             else:
-                message = self._build_result_message(game, "Dealer has blackjack.")
+                message = self._build_result_message(game, "💀 Dealer has blackjack.")
             await ctx.send(message)
             self._finish_game(game_id, game)
             return
@@ -263,9 +263,9 @@ class BlackjackCog(commands.Cog):
     @blackjack.error
     async def blackjack_error(self, ctx: commands.Context, error: Exception) -> None:
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("Use `!blackjack <bet>` or `!bj <bet>`, for example `!blackjack 250`.")
+            await ctx.send("🎰 Use `!blackjack <bet>` or `!bj <bet>`, for example `!blackjack 250`.")
         elif isinstance(error, commands.BadArgument):
-            await ctx.send("Your bet must be a whole number.")
+            await ctx.send("🔢 Your bet must be a whole number.")
 
 
 async def setup(bot: commands.Bot) -> None:

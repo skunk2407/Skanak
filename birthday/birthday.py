@@ -158,7 +158,7 @@ class DayPageButton(Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         month = self.birthday_view.selected_month
         if month is None:
-            return await interaction.response.send_message("Choose your month first.", ephemeral=True)
+            return await interaction.response.send_message("📅 Choose your month first.", ephemeral=True)
 
         max_day = _days_in_month(month)
         new_start = self.birthday_view.day_page_start + (25 * self.direction)
@@ -179,12 +179,12 @@ class SaveBirthdayButton(Button):
 
         if month is None or day is None:
             return await interaction.response.send_message(
-                "Choose your month and your day before saving.",
+                "🎂 Choose your month and your day before saving.",
                 ephemeral=True,
             )
         if not _is_valid_day(month, day):
             return await interaction.response.send_message(
-                "That day does not exist in the selected month.",
+                "⚠️ That day does not exist in the selected month.",
                 ephemeral=True,
             )
 
@@ -204,7 +204,7 @@ class SaveBirthdayButton(Button):
 
         await interaction.response.edit_message(
             content=(
-                f"Your birthday was {status}: **{_month_name(month)} {day}**.\n"
+                f"🎉 Your birthday was {status}: **{_month_name(month)} {day}**.\n"
                 "You can use `!birthday` again anytime to change it."
             ),
             view=self.birthday_view,
@@ -250,7 +250,7 @@ class BirthdayView(View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message(
-                "This birthday menu is not for you. Use `!birthday` to open your own.",
+                "🎂 This birthday menu is not for you. Use `!birthday` to open your own.",
                 ephemeral=True,
             )
             return False
@@ -290,7 +290,7 @@ class BirthdayCog(commands.Cog):
             except discord.HTTPException:
                 return
 
-        await channel.send(f"Happy birthday, {user.mention}! We hope you have an amazing day.")
+        await channel.send(f"🎂 Happy birthday, {user.mention}! We hope you have an amazing day!")
 
     @tasks.loop(hours=1)
     async def check_birthdays(self) -> None:
@@ -328,11 +328,11 @@ class BirthdayCog(commands.Cog):
 
         if existing:
             intro = (
-                f"Your saved birthday is **{_month_name(existing_month)} {existing_day}**.\n"
+                f"🎉 Your saved birthday is **{_month_name(existing_month)} {existing_day}**.\n"
                 "Choose a new date below if you want to replace it."
             )
         else:
-            intro = "Set your birthday below."
+            intro = "🎂 Set your birthday below."
 
         view = BirthdayView(
             ctx.author.id,
