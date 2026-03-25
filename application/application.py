@@ -186,6 +186,10 @@ class ApplyCog(commands.Cog):
         )
 
         vote_message = await channel.send(embed=embed, view=_build_vote_view(app_id))
+        try:
+            await vote_message.pin(reason="Auto-pinned community application")
+        except discord.HTTPException:
+            pass
 
         applications = _load_applications()
         applications[app_id] = {
