@@ -88,22 +88,22 @@ class ApplicationModal(Modal, title="Community Application"):
             required=True,
         )
         self.setup = TextInput(
-            label="Console player and soundboard?",
-            placeholder="Example: No, Yes",
+            label="Are you a console player? Do you use any soundboard?",
+            placeholder="Explain your setup in your own words.",
             max_length=100,
             required=True,
         )
         self.gameplay = TextInput(
-            label="Favorite class and kills per round?",
-            placeholder="Example: Rifleman, around 4-5 kills",
+            label="What is your favorite class and your average kills per round?",
+            placeholder="Tell us about your playstyle.",
             max_length=150,
             required=True,
         )
         self.background = TextInput(
-            label="Hours, regiment, regular player?",
-            placeholder="Example: 250h, None, Yes",
+            label="How many hours do you have? What was your old regiment if you had one? Do you play regularly?",
+            placeholder="Share anything useful about your playtime and background.",
             style=discord.TextStyle.paragraph,
-            max_length=200,
+            max_length=300,
             required=True,
         )
         self.add_item(self.reason)
@@ -116,9 +116,9 @@ class ApplicationModal(Modal, title="Community Application"):
         answers = {
             "Why do you want to join?": str(self.reason.value).strip(),
             "In-game name": str(self.ingame_name.value).strip(),
-            "Console player? Do you own a soundboard?": str(self.setup.value).strip(),
+            "Are you a console player? Do you use any soundboard?": str(self.setup.value).strip(),
             "Favorite class and average kills per round": str(self.gameplay.value).strip(),
-            "Hours played, previous regiment, active player?": str(self.background.value).strip(),
+            "Hours played, old regiment if any, and regular activity": str(self.background.value).strip(),
         }
         await self.cog.submit_application(interaction, answers)
 
