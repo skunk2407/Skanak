@@ -9,7 +9,7 @@ from discord.ui import Button, Modal, TextInput, View
 from storage.database import load_app_state, save_app_state
 
 APPLICATION_STATE_KEY = "application.votes"
-HOLDFAST_CHANNEL_ID = 1106197912075116614
+HOLDFAST_CHANNEL_ID = 1488075846236246077
 VOTE_DURATION_HOURS = 12
 MIN_TOTAL_VOTES = 5
 
