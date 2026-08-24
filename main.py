@@ -43,6 +43,7 @@ class MyBot(commands.Bot):
             "economy.slash",
             "economy.extras",
             "economy.web_notifications",
+            "player_of_month.player_of_month",
             "logs.mod_logs",
         ]
         for ext in initial_extensions:
