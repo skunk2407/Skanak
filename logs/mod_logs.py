@@ -188,15 +188,50 @@ class ModLogs(commands.Cog):
         await ch.send(embed=emb)
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
+    async def on_voice_state_update(
+        self,
+        member: discord.Member,
+        before: discord.VoiceState,
+        after: discord.VoiceState,
+    ):
         """Triggered when a user joins, leaves, or switches voice channels."""
+        if before.channel == after.channel:
+            return
+
         ch = self.get_channel(VOICE_LOG_CH_ID)
         if not ch:
             return
-        if before.channel != after.channel:
-            b = before.channel.mention if before.channel else "∅"
-            a = after.channel.mention if after.channel else "∅"
-            await ch.send(f"🎙️ **{member}**: {b} ➜ {a}")
+
+        if before.channel is None:
+            description = (
+                f"{member.mention} joined voice channel "
+                f"{after.channel.mention}"
+            )
+            color = discord.Color.green()
+        elif after.channel is None:
+            description = (
+                f"{member.mention} left voice channel "
+                f"{before.channel.mention}"
+            )
+            color = discord.Color.red()
+        else:
+            description = (
+                f"{member.mention} moved from {before.channel.mention} "
+                f"to {after.channel.mention}"
+            )
+            color = discord.Color.orange()
+
+        emb = discord.Embed(
+            description=description,
+            color=color,
+            timestamp=datetime.now(timezone.utc),
+        )
+        emb.set_author(
+            name=member.display_name,
+            icon_url=member.display_avatar.url,
+        )
+        emb.set_footer(text=f"ID: {member.id}")
+        await ch.send(embed=emb)
 
 # --- Cog setup function ---
 async def setup(bot: commands.Bot):
