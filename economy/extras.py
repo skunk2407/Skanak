@@ -121,7 +121,7 @@ class EconomyExtras(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def lottery_draw(self, ctx: commands.Context, jackpot: Optional[int] = None):
         """Tirer le gagnant de la loterie (admin)."""
-        lotto = _load_json(LOTT_PATH)
+        lotto = _load_state(LOTT_STATE_KEY)
         gid = str(ctx.guild.id) if ctx.guild else "global"
         entries = lotto.get(gid, [])
 

@@ -6,7 +6,12 @@ import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, Modal, TextInput, View
 
-from storage.database import load_app_state, save_app_state
+from storage.database import (
+    claim_web_applications,
+    finish_web_application,
+    load_app_state,
+    save_app_state,
+)
 
 APPLICATION_STATE_KEY = "application.votes"
 HOLDFAST_CHANNEL_ID = 1488075846236246077
@@ -141,9 +146,94 @@ class ApplyCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.review_pending.start()
+        self.publish_web_applications.start()
 
     def cog_unload(self) -> None:
         self.review_pending.cancel()
+        self.publish_web_applications.cancel()
+
+    async def _application_channel(self):
+        channel = self.bot.get_channel(HOLDFAST_CHANNEL_ID)
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(HOLDFAST_CHANNEL_ID)
+            except discord.HTTPException:
+                return None
+        return channel if isinstance(channel, discord.TextChannel) else None
+
+    async def submit_web_application(self, queued: dict) -> int:
+        channel = await self._application_channel()
+        if channel is None:
+            raise RuntimeError("Application channel is unavailable")
+
+        raw_applicant_id = str(queued.get("applicant_id") or "0")
+        applicant_id = int(raw_applicant_id) if raw_applicant_id.isdigit() and raw_applicant_id != "0" else 0
+        applicant_name = str(queued.get("applicant_name") or "Website applicant")
+        payload = queued.get("answers") if isinstance(queued.get("answers"), dict) else {}
+        language = str(payload.get("language") or "en").upper()
+        answers = payload.get("responses", payload)
+        if not isinstance(answers, dict):
+            answers = {}
+        applicant_display = f"<@{applicant_id}>" if applicant_id else f"**{applicant_name}** *(website nickname, no Discord linked)*"
+        app_id = str(queued["id"])
+        deadline_ts = int((_now_utc() + timedelta(hours=VOTE_DURATION_HOURS)).timestamp())
+        embed = discord.Embed(
+            title="📨 New Community Application",
+            description=f"Applicant: {applicant_display}\nForm language: **{language}**\nSubmitted via: **toxicflaggers.com**\nVoting closes: **{_fmt_deadline(deadline_ts)}**",
+            color=discord.Color.green(),
+            timestamp=_now_utc(),
+        )
+        if queued.get("avatar_url"):
+            embed.set_author(name=applicant_name, icon_url=str(queued["avatar_url"]))
+        else:
+            embed.set_author(name=applicant_name)
+        if not applicant_id:
+            embed.add_field(
+                name="Identity note",
+                value="No Discord account was linked. Match this applicant using their stated nickname and in-game regiment application.",
+                inline=False,
+            )
+        for question, answer in answers.items():
+            embed.add_field(name=str(question), value=str(answer).strip() or "No answer", inline=False)
+        embed.add_field(name="Votes", value="✅ Valid 0 | ❌ Cross 0 | Total 0", inline=False)
+        embed.add_field(name="Decision Rules", value=f"Closes after {VOTE_DURATION_HOURS}h. Minimum {MIN_TOTAL_VOTES} total votes required.", inline=False)
+        vote_message = await channel.send(embed=embed, view=_build_vote_view(app_id))
+        try:
+            await vote_message.pin(reason="Auto-pinned website community application")
+        except discord.HTTPException:
+            pass
+
+        applications = _load_applications()
+        applications[app_id] = {
+            "applicant_id": applicant_id,
+            "applicant_name": applicant_name,
+            "guild_id": channel.guild.id,
+            "channel_id": vote_message.channel.id,
+            "message_id": vote_message.id,
+            "created_at_ts": _ts(),
+            "deadline_ts": deadline_ts,
+            "status": "pending",
+            "answers": answers,
+            "votes": {"approve": [], "reject": []},
+            "result_reason": "",
+            "source": "web",
+        }
+        _save_applications(applications)
+        return vote_message.id
+
+    @tasks.loop(seconds=10)
+    async def publish_web_applications(self) -> None:
+        for queued in claim_web_applications():
+            try:
+                message_id = await self.submit_web_application(queued)
+                finish_web_application(str(queued["id"]), message_id=message_id)
+            except Exception as exception:
+                finish_web_application(str(queued["id"]), error=str(exception))
+                print(f"[applications] Website application {queued.get('id')} failed: {exception}")
+
+    @publish_web_applications.before_loop
+    async def before_publish_web_applications(self) -> None:
+        await self.bot.wait_until_ready()
 
     @commands.command(name="apply")
     async def apply(self, ctx: commands.Context) -> None:

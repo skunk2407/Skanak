@@ -6,6 +6,8 @@ from discord.ext import commands
 
 from .badges import BADGES, dispatch_badge_event
 from .stats import get_user_stats, load_stats, save_stats
+from storage.daily import claim_daily
+from storage.work import claim_work
 
 STEAL_COOLDOWN_SECONDS = 43200
 
@@ -34,80 +36,35 @@ class Economy(commands.Cog):
 
     @commands.command(name="work", aliases=["wo"])
     async def work(self, ctx: commands.Context) -> None:
+        result = claim_work(ctx.author.id, source="discord")
+        if not result["claimed"]:
+            return await ctx.send(
+                f"⏳ Hold on! You can work again in **{humanize(result['remaining_seconds'])}**."
+            )
+
+        await ctx.send(f"🧀 {ctx.author.mention}, you worked hard and earned **{result['reward']}** cheese!")
         stats = load_stats()
         user = get_user_stats(stats, ctx.author.id)
-        now = datetime.utcnow()
-
-        if user["last_work"]:
-            last = datetime.fromisoformat(user["last_work"])
-            remaining = 7200 - (now - last).total_seconds()
-            if remaining > 0:
-                return await ctx.send(f"⏳ Hold on! You can work again in **{humanize(remaining)}**.")
-
-        base = random.randint(0, 350)
-        reward = int(base * user.get("next_work_multiplier", 1.0))
-        user["next_work_multiplier"] = 1.0
-
-        user["cheese"] += reward
-        user["total_earned"] += reward
-        user["last_work"] = now.isoformat()
-        user["work_count"] = int(user.get("work_count", 0)) + 1
-        user["cheese_since_last_spend"] = user.get("cheese_since_last_spend", 0) + reward
-
-        if reward > user.get("max_work_gain", 0):
-            user["max_work_gain"] = reward
-
-        previous_action = user.get("last_action")
-        if previous_action == "daily" and user.get("last_daily"):
-            if (now - datetime.fromisoformat(user["last_daily"])).total_seconds() <= 60:
-                user["quick_combo"] = user.get("quick_combo", 0) + 1
-            else:
-                user["quick_combo"] = 1
-        else:
-            user["quick_combo"] = 1
-        user["last_action"] = "work"
-
-        save_stats(stats)
-        await ctx.send(f"🧀 {ctx.author.mention}, you worked hard and earned **{reward}** cheese!")
         await dispatch_badge_event("work", ctx, user_state=user, stats=stats)
 
     @commands.command(name="daily", aliases=["da"])
     async def daily(self, ctx: commands.Context) -> None:
+        result = claim_daily(ctx.author.id, source="discord")
+
+        if not result["claimed"]:
+            return await ctx.send(
+                f"📅 Your next daily is ready in **{humanize(result['remaining_seconds'])}**."
+            )
+
+        await ctx.send(
+            f"🎉 {ctx.author.mention}, you claimed **{result['reward']}** cheese! "
+            f"Current streak: **{result['streak']}** 🔥"
+        )
+
+        # Badge evaluation reads the profile after the atomic claim so both
+        # Discord and web rewards advance the exact same economy state.
         stats = load_stats()
         user = get_user_stats(stats, ctx.author.id)
-        now = datetime.utcnow()
-
-        if user["last_daily"]:
-            last = datetime.fromisoformat(user["last_daily"])
-            if (now - last).days > 1:
-                user["daily_streak"] = 0
-            else:
-                remaining = 86400 - (now - last).total_seconds()
-                if remaining > 0:
-                    return await ctx.send(f"📅 Your next daily is ready in **{humanize(remaining)}**.")
-
-        if user["daily_streak"] < 30:
-            reward = 100 + user["daily_streak"] * 25
-            user["daily_streak"] += 1
-        else:
-            reward = 100
-            user["daily_streak"] = 1
-
-        reward = int(reward * user.get("next_daily_multiplier", 1.0))
-        user["next_daily_multiplier"] = 1.0
-
-        user["cheese"] += reward
-        user["total_earned"] += reward
-        user["last_daily"] = now.isoformat()
-        user["daily_count"] = int(user.get("daily_count", 0)) + 1
-        user["last_action"] = "daily"
-        user["cheese_since_last_spend"] = user.get("cheese_since_last_spend", 0) + reward
-
-        save_stats(stats)
-        await ctx.send(
-            f"🎉 {ctx.author.mention}, you claimed **{reward}** cheese! "
-            f"Current streak: **{user['daily_streak']}** 🔥"
-        )
         await dispatch_badge_event("daily", ctx, user_state=user, stats=stats)
 
     @commands.command(name="share")
