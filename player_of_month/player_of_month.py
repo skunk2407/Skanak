@@ -6,7 +6,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ui import Button, Modal, Select, TextInput, UserSelect, View
+from discord.ui import Button, Modal, Select, TextInput, View
 
 from storage.database import load_app_state, save_app_state
 
@@ -18,13 +18,13 @@ MAX_NOMINATIONS_PER_MEMBER = 2
 MAX_FINALISTS = 5
 
 CATEGORIES = {
-    "battlefield": "Battlefield Performance",
+    "scores": "High Scores and Killstreaks",
     "teamwork": "Teamwork and Discipline",
-    "leadership": "Leadership",
-    "attendance": "Attendance and Reliability",
     "helping": "Helping or Training Other Players",
     "improvement": "Improvement or Memorable Actions",
 }
+
+MEMBERS_PER_PAGE = 25
 
 
 def _now_iso() -> str:
@@ -136,10 +136,8 @@ def _build_nomination_panel(state: dict, disabled: bool = False) -> tuple[discor
     embed.add_field(
         name="What should nominations recognize?",
         value=(
-            "⚔️ Battlefield performance\n"
+            "🔥 High scores and killstreaks\n"
             "🤝 Teamwork and discipline\n"
-            "📣 Leadership\n"
-            "📅 Attendance and reliability\n"
             "🎓 Helping or training other players\n"
             "📈 Improvement or memorable actions"
         ),
@@ -240,17 +238,69 @@ def _build_voting_panel(
     return embed, view
 
 
-def _build_nominee_select() -> View:
+def _eligible_members(guild: discord.Guild) -> list[discord.Member]:
+    return sorted(
+        (
+            member
+            for member in guild.members
+            if not member.bot and _has_tf_boys_role(member)
+        ),
+        key=lambda member: (member.display_name.casefold(), member.id),
+    )
+
+
+def _build_nominee_select(
+    guild: discord.Guild,
+    requested_page: int = 0,
+) -> tuple[View, int, int, int]:
+    eligible_members = _eligible_members(guild)
+    total_members = len(eligible_members)
+    total_pages = max(1, (total_members + MEMBERS_PER_PAGE - 1) // MEMBERS_PER_PAGE)
+    page = max(0, min(requested_page, total_pages - 1))
+    start = page * MEMBERS_PER_PAGE
+    page_members = eligible_members[start : start + MEMBERS_PER_PAGE]
+
     view = View(timeout=180)
+    options = [
+        discord.SelectOption(
+            label=member.display_name[:100],
+            value=str(member.id),
+            description=f"TF Boyz [HF] • {member}"[:100],
+        )
+        for member in page_members
+    ]
+    if options:
+        view.add_item(
+            Select(
+                placeholder=f"Select a TF Boyz member — page {page + 1}/{total_pages}",
+                options=options,
+                min_values=1,
+                max_values=1,
+                custom_id="potm:nominee",
+                row=0,
+            )
+        )
     view.add_item(
-        UserSelect(
-            placeholder="Select the TF Boys member to nominate",
-            min_values=1,
-            max_values=1,
-            custom_id="potm:nominee",
+        Button(
+            label="Previous",
+            emoji="⬅️",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"potm:nominee_page:{page - 1}",
+            disabled=page == 0,
+            row=1,
         )
     )
-    return view
+    view.add_item(
+        Button(
+            label="Next",
+            emoji="➡️",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"potm:nominee_page:{page + 1}",
+            disabled=page >= total_pages - 1,
+            row=1,
+        )
+    )
+    return view, page, total_pages, total_members
 
 
 def _build_category_select(nominee_id: int) -> View:
@@ -600,7 +650,7 @@ class PlayerOfMonthCog(commands.Cog):
 
         if custom_id == "potm:start_nomination":
             member = await self._require_eligible(interaction)
-            if member is None:
+            if member is None or interaction.guild is None:
                 return
             state = _load_state()
             if state.get("phase") != "nominations":
@@ -614,10 +664,45 @@ class PlayerOfMonthCog(commands.Cog):
                     "You have already used both of your nominations.",
                     ephemeral=True,
                 )
+            view, page, total_pages, total_members = _build_nominee_select(interaction.guild)
+            if total_members == 0:
+                return await interaction.response.send_message(
+                    "No eligible TF Boyz members were found.",
+                    ephemeral=True,
+                )
             return await interaction.response.send_message(
-                f"Select a player to nominate. You have **{MAX_NOMINATIONS_PER_MEMBER - used}** nomination(s) remaining.",
-                view=_build_nominee_select(),
+                f"Select a TF Boyz member to nominate. You have **{MAX_NOMINATIONS_PER_MEMBER - used}** nomination(s) remaining.\n"
+                f"Showing **page {page + 1}/{total_pages}** — {total_members} eligible members.",
+                view=view,
                 ephemeral=True,
+            )
+
+        if custom_id.startswith("potm:nominee_page:"):
+            member = await self._require_eligible(interaction)
+            if member is None or interaction.guild is None:
+                return
+            state = _load_state()
+            if state.get("phase") != "nominations":
+                return await interaction.response.send_message(
+                    "The nomination phase is currently closed.",
+                    ephemeral=True,
+                )
+            requested_page = custom_id.rsplit(":", 1)[-1]
+            if not requested_page.lstrip("-").isdigit():
+                return await interaction.response.send_message(
+                    "Invalid member page.",
+                    ephemeral=True,
+                )
+            view, page, total_pages, total_members = _build_nominee_select(
+                interaction.guild,
+                int(requested_page),
+            )
+            return await interaction.response.edit_message(
+                content=(
+                    f"Select a TF Boyz member to nominate.\n"
+                    f"Showing **page {page + 1}/{total_pages}** — {total_members} eligible members."
+                ),
+                view=view,
             )
 
         if custom_id == "potm:nominee":
