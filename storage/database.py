@@ -135,6 +135,53 @@ def save_app_state(state_key: str, value: Any) -> None:
             )
 
 
+def claim_web_applications(limit: int = 5) -> list[dict]:
+    """Atomically claim website applications for Discord publication."""
+    initialize_database()
+    with _connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_application_queue (
+                id TEXT PRIMARY KEY, applicant_id TEXT NOT NULL,
+                applicant_name TEXT NOT NULL, avatar_url TEXT NULL,
+                answers TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+                discord_message_id TEXT NULL, error TEXT NULL,
+                created_at TEXT NOT NULL, processed_at TEXT NULL
+            )
+            """
+        )
+        with conn:
+            rows = conn.execute(
+                "SELECT * FROM web_application_queue WHERE status='pending' ORDER BY created_at ASC LIMIT ?",
+                (max(1, min(limit, 20)),),
+            ).fetchall()
+            if rows:
+                conn.executemany(
+                    "UPDATE web_application_queue SET status='processing', error=NULL WHERE id=? AND status='pending'",
+                    [(row['id'],) for row in rows],
+                )
+    applications = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item['answers'] = json.loads(item['answers'])
+        except (TypeError, json.JSONDecodeError):
+            item['answers'] = {}
+        applications.append(item)
+    return applications
+
+
+def finish_web_application(queue_id: str, message_id: int | None = None, error: str = "") -> None:
+    initialize_database()
+    status = 'posted' if message_id else 'failed'
+    with _connect() as conn:
+        with conn:
+            conn.execute(
+                "UPDATE web_application_queue SET status=?, discord_message_id=?, error=?, processed_at=? WHERE id=?",
+                (status, str(message_id) if message_id else None, error[:500] or None, _now_iso(), queue_id),
+            )
+
+
 def _state_exists(state_key: str) -> bool:
     with _connect() as conn:
         row = conn.execute(

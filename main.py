@@ -42,6 +42,7 @@ class MyBot(commands.Bot):
             "economy.profile",
             "economy.slash",
             "economy.extras",
+            "economy.web_notifications",
             "logs.mod_logs",
         ]
         for ext in initial_extensions:
