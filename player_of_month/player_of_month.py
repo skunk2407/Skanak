@@ -1,11 +1,13 @@
 import asyncio
+import secrets
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import Button, Modal, Select, TextInput, View
 
 from storage.database import load_app_state, save_app_state
@@ -14,8 +16,10 @@ POTM_CHANNEL_ID = 1541552645121118279
 TF_BOYS_ROLE_ID = 810161754775617553
 POTM_WINNER_ROLE_ID = 1541558015239393331
 POTM_STATE_KEY = "player_of_month.state.v1"
+POTM_HISTORY_KEY = "player_of_month.history.v1"
 MAX_NOMINATIONS_PER_MEMBER = 2
 MAX_FINALISTS = 5
+PARIS_TZ = ZoneInfo("Europe/Paris")
 
 CATEGORIES = {
     "scores": "High Scores and Killstreaks",
@@ -36,7 +40,12 @@ def _default_state() -> dict:
         "version": 1,
         "phase": "idle",
         "test_mode": True,
+        "automatic": False,
+        "cycle_id": "",
         "label": "",
+        "starts_at": "",
+        "nominations_end_at": "",
+        "voting_end_at": "",
         "channel_id": POTM_CHANNEL_ID,
         "panel_message_id": 0,
         "result_message_id": 0,
@@ -77,11 +86,85 @@ def _new_test_state(label: str) -> dict:
         {
             "phase": "nominations",
             "test_mode": True,
+            "automatic": False,
             "label": label,
             "created_at": _now_iso(),
         }
     )
     return state
+
+
+def _next_month(year: int, month: int) -> tuple[int, int]:
+    return (year + 1, 1) if month == 12 else (year, month + 1)
+
+
+def _new_automatic_state(year: int, month: int, now: Optional[datetime] = None) -> dict:
+    current = now or datetime.now(timezone.utc)
+    start_local = datetime(year, month, 1, 0, 0, tzinfo=PARIS_TZ)
+    nominations_end_local = datetime(year, month, 25, 0, 0, tzinfo=PARIS_TZ)
+    next_year, next_month = _next_month(year, month)
+    voting_end_local = datetime(next_year, next_month, 1, 0, 0, tzinfo=PARIS_TZ)
+
+    state = _default_state()
+    state.update(
+        {
+            "phase": "scheduled" if current < start_local.astimezone(timezone.utc) else "nominations",
+            "test_mode": False,
+            "automatic": True,
+            "cycle_id": f"{year:04d}-{month:02d}",
+            "label": start_local.strftime("%B %Y"),
+            "starts_at": start_local.astimezone(timezone.utc).isoformat(),
+            "nominations_end_at": nominations_end_local.astimezone(timezone.utc).isoformat(),
+            "voting_end_at": voting_end_local.astimezone(timezone.utc).isoformat(),
+            "created_at": _now_iso(),
+        }
+    )
+    return state
+
+
+def _parse_iso(value: str) -> Optional[datetime]:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _discord_timestamp(value: str, style: str = "F") -> str:
+    parsed = _parse_iso(value)
+    return f"<t:{int(parsed.timestamp())}:{style}>" if parsed else "Not scheduled"
+
+
+def _deadline_passed(state: dict, key: str) -> bool:
+    if not state.get("automatic"):
+        return False
+    deadline = _parse_iso(str(state.get(key, "")))
+    return deadline is not None and datetime.now(timezone.utc) >= deadline
+
+
+def _load_history() -> list[dict]:
+    history = load_app_state(POTM_HISTORY_KEY, default=[])
+    return history if isinstance(history, list) else []
+
+
+def _archive_cycle(state: dict, outcome: str) -> None:
+    history = _load_history()
+    history.append(
+        {
+            "cycle_id": state.get("cycle_id"),
+            "label": state.get("label"),
+            "winner_id": int(state.get("winner_id", 0) or 0),
+            "nomination_count": len(state.get("nominations", [])),
+            "vote_count": len(state.get("votes", {})),
+            "finalists": [int(value) for value in state.get("finalists", [])],
+            "outcome": outcome,
+            "result_message_id": int(state.get("result_message_id", 0) or 0),
+            "closed_at": _now_iso(),
+        }
+    )
+    save_app_state(POTM_HISTORY_KEY, history[-36:])
 
 
 def _has_tf_boys_role(member: discord.Member) -> bool:
@@ -113,13 +196,48 @@ def _rank_finalists(state: dict, eligible_ids: set[int]) -> list[int]:
     return ranked[:MAX_FINALISTS]
 
 
-def _build_nomination_panel(state: dict, disabled: bool = False) -> tuple[discord.Embed, View]:
-    label = state.get("label") or "Test Cycle"
+def _build_scheduled_panel(state: dict) -> tuple[discord.Embed, View]:
+    label = state.get("label") or "Upcoming Cycle"
     embed = discord.Embed(
         title=f"🏆 TF Player of the Month — {label}",
         description=(
-            "**TEST MODE — no monthly result is official yet.**\n\n"
-            "Nominate a TF Boys member who distinguished themselves through "
+            "The next automatic TF Player of the Month cycle is scheduled.\n\n"
+            f"Nominations open: **{_discord_timestamp(str(state.get('starts_at', '')))}**\n"
+            f"Final voting opens: **{_discord_timestamp(str(state.get('nominations_end_at', '')))}**\n"
+            f"Winner announced: **{_discord_timestamp(str(state.get('voting_end_at', '')))}**"
+        ),
+        color=discord.Color.dark_gold(),
+    )
+    embed.add_field(
+        name="Who can participate?",
+        value=(
+            f"Only members with the <@&{TF_BOYS_ROLE_ID}> role can nominate, "
+            "be nominated, and vote."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="How it works",
+        value=(
+            "1. Nominate up to two TF players and explain their Holdfast contribution.\n"
+            "2. The five most nominated eligible players reach the final.\n"
+            "3. Every TF Boyz member gets one private final vote.\n"
+            "4. Skanak announces the winner and awards the monthly role."
+        ),
+        inline=False,
+    )
+    embed.set_footer(text="This panel will update automatically when nominations open.")
+    return embed, View(timeout=None)
+
+
+def _build_nomination_panel(state: dict, disabled: bool = False) -> tuple[discord.Embed, View]:
+    label = state.get("label") or "Test Cycle"
+    test_banner = "**TEST MODE — no monthly result is official yet.**\n\n" if state.get("test_mode") else ""
+    embed = discord.Embed(
+        title=f"🏆 TF Player of the Month — {label}",
+        description=(
+            test_banner
+            + "Nominate a TF Boys member who distinguished themselves through "
             "their actions in **Holdfast**. Nominations and nominator identities "
             "remain private during this phase."
         ),
@@ -153,6 +271,12 @@ def _build_nomination_panel(state: dict, disabled: bool = False) -> tuple[discor
         ),
         inline=False,
     )
+    if state.get("automatic"):
+        embed.add_field(
+            name="Nomination deadline",
+            value=_discord_timestamp(str(state.get("nominations_end_at", ""))),
+            inline=False,
+        )
     embed.set_footer(text="Use the button below to submit a private nomination.")
 
     view = View(timeout=None)
@@ -186,11 +310,12 @@ def _build_voting_panel(
     disabled: bool = False,
 ) -> tuple[discord.Embed, View]:
     label = state.get("label") or "Test Cycle"
+    test_banner = "**TEST MODE — final voting is now open.**\n\n" if state.get("test_mode") else ""
     embed = discord.Embed(
         title=f"🗳️ TF Player of the Month — {label}",
         description=(
-            "**TEST MODE — final voting is now open.**\n\n"
-            "The finalists below received the most valid nominations for their "
+            test_banner
+            + "The finalists below received the most valid nominations for their "
             "Holdfast contributions. Every eligible TF Boys member has one private vote."
         ),
         color=discord.Color.blurple(),
@@ -223,6 +348,12 @@ def _build_voting_panel(
         ),
         inline=False,
     )
+    if state.get("automatic"):
+        embed.add_field(
+            name="Voting deadline",
+            value=_discord_timestamp(str(state.get("voting_end_at", ""))),
+            inline=False,
+        )
     embed.set_footer(text="Use the button below to cast or change your vote.")
 
     view = View(timeout=None)
@@ -236,6 +367,59 @@ def _build_voting_panel(
         )
     )
     return embed, view
+
+
+def _build_result_embed(
+    state: dict,
+    winner: discord.Member,
+    random_tiebreak: bool = False,
+) -> discord.Embed:
+    vote_counts = Counter(int(value) for value in state.get("votes", {}).values())
+    nomination_counts = _nomination_counts(state)
+    category_text, reasons = _candidate_summary(state, winner.id)
+    if state.get("test_mode"):
+        extra = "\n\nThis is a **test result** used to preview the complete Player of the Month flow."
+    else:
+        extra = "\n\nThe TF Boys community has selected this month’s winner for their Holdfast contribution."
+
+    embed = discord.Embed(
+        title=f"🏆 TF Player of the Month — {state.get('label') or 'Result'}",
+        description=f"Congratulations to {winner.mention}!{extra}",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.set_thumbnail(url=winner.display_avatar.url)
+    embed.add_field(name="Recognized for", value=category_text, inline=False)
+    embed.add_field(name="Nominations", value=str(nomination_counts[winner.id]), inline=True)
+    embed.add_field(name="Final votes", value=str(vote_counts[winner.id]), inline=True)
+    if reasons:
+        embed.add_field(name="Community recognition", value=f"*“{reasons[0][:700]}”*", inline=False)
+    embed.add_field(
+        name="Reward",
+        value=f"Awarded the <@&{POTM_WINNER_ROLE_ID}> role until the next winner is selected.",
+        inline=False,
+    )
+    if random_tiebreak:
+        embed.add_field(
+            name="Tiebreak",
+            value="The finalists remained tied on votes and nominations, so the winner was drawn automatically.",
+            inline=False,
+        )
+    mode = "Test mode" if state.get("test_mode") else "Automatic monthly cycle"
+    embed.set_footer(text=f"Winner ID: {winner.id} • {mode}")
+    return embed
+
+
+def _build_no_winner_embed(state: dict, reason: str) -> discord.Embed:
+    return discord.Embed(
+        title=f"🏆 TF Player of the Month — {state.get('label') or 'Cycle Closed'}",
+        description=(
+            f"This monthly cycle closed without a winner.\n\n**Reason:** {reason}\n\n"
+            "The current title holder keeps the role until a future cycle selects a new winner."
+        ),
+        color=discord.Color.dark_grey(),
+        timestamp=datetime.now(timezone.utc),
+    )
 
 
 def _eligible_members(guild: discord.Guild) -> list[discord.Member]:
@@ -390,6 +574,10 @@ class PlayerOfMonthCog(commands.Cog):
         self.bot = bot
         self._lock = asyncio.Lock()
         self._ready_once = False
+        self.automatic_cycle.start()
+
+    def cog_unload(self) -> None:
+        self.automatic_cycle.cancel()
 
     async def _get_channel(self) -> Optional[discord.TextChannel]:
         channel = self.bot.get_channel(POTM_CHANNEL_ID)
@@ -442,7 +630,9 @@ class PlayerOfMonthCog(commands.Cog):
             return None
 
         phase = str(state.get("phase", "idle"))
-        if phase == "nominations":
+        if phase == "scheduled":
+            embed, view = _build_scheduled_panel(state)
+        elif phase == "nominations":
             embed, view = _build_nomination_panel(state)
         elif phase == "voting":
             embed, view = _build_voting_panel(state, channel.guild)
@@ -464,7 +654,9 @@ class PlayerOfMonthCog(commands.Cog):
         if message is None:
             return
         phase = str(state.get("phase", "idle"))
-        if phase == "voting" and message.guild:
+        if phase == "scheduled":
+            embed, view = _build_scheduled_panel(state)
+        elif phase == "voting" and message.guild:
             embed, view = _build_voting_panel(state, message.guild, disabled=True)
         else:
             embed, view = _build_nomination_panel(state, disabled=True)
@@ -500,7 +692,7 @@ class PlayerOfMonthCog(commands.Cog):
 
         async with self._lock:
             state = _load_state()
-            if state.get("phase") != "nominations":
+            if state.get("phase") != "nominations" or _deadline_passed(state, "nominations_end_at"):
                 return await interaction.response.send_message(
                     "The nomination phase is currently closed.",
                     ephemeral=True,
@@ -544,7 +736,7 @@ class PlayerOfMonthCog(commands.Cog):
             return
 
         state = _load_state()
-        if state.get("phase") != "nominations":
+        if state.get("phase") != "nominations" or _deadline_passed(state, "nominations_end_at"):
             return await interaction.response.send_message(
                 "The nomination phase is currently closed.",
                 ephemeral=True,
@@ -586,7 +778,7 @@ class PlayerOfMonthCog(commands.Cog):
 
         async with self._lock:
             state = _load_state()
-            if state.get("phase") != "voting":
+            if state.get("phase") != "voting" or _deadline_passed(state, "voting_end_at"):
                 return await interaction.response.send_message(
                     "Final voting is currently closed.",
                     ephemeral=True,
@@ -630,14 +822,148 @@ class PlayerOfMonthCog(commands.Cog):
         if role not in winner.roles:
             await winner.add_roles(role, reason="TF Player of the Month winner")
 
+    async def _close_without_winner(self, state: dict, reason: str) -> None:
+        previous_phase = str(state.get("phase", "nominations"))
+        await self._disable_panel({**state, "phase": previous_phase}, reason)
+        state["phase"] = "closed"
+        state["winner_id"] = 0
+        channel = await self._get_channel()
+        if channel is not None:
+            result_message = await channel.send(embed=_build_no_winner_embed(state, reason))
+            state["result_message_id"] = result_message.id
+        _save_state(state)
+        _archive_cycle(state, "no_winner")
+
+    async def _close_automatic_vote(self, state: dict, guild: discord.Guild) -> None:
+        eligible_ids = {member.id for member in _eligible_members(guild)}
+        finalists = {int(value) for value in state.get("finalists", [])}
+        vote_counts = Counter(
+            int(candidate_id)
+            for candidate_id in state.get("votes", {}).values()
+            if int(candidate_id) in finalists and int(candidate_id) in eligible_ids
+        )
+        if not vote_counts:
+            await self._close_without_winner(state, "No eligible final votes were cast.")
+            return
+
+        highest_votes = max(vote_counts.values())
+        leaders = [candidate_id for candidate_id, count in vote_counts.items() if count == highest_votes]
+        random_tiebreak = False
+        if len(leaders) > 1:
+            nomination_counts = _nomination_counts(state)
+            highest_nominations = max(nomination_counts[candidate_id] for candidate_id in leaders)
+            leaders = [
+                candidate_id
+                for candidate_id in leaders
+                if nomination_counts[candidate_id] == highest_nominations
+            ]
+        if len(leaders) > 1:
+            random_tiebreak = True
+            winner_id = secrets.choice(sorted(leaders))
+        else:
+            winner_id = leaders[0]
+
+        winner = await self._get_member(guild, winner_id)
+        if winner is None or winner.bot or not _has_tf_boys_role(winner):
+            await self._close_without_winner(state, "The selected finalist was no longer eligible.")
+            return
+
+        try:
+            await self._set_winner_role(guild, winner)
+        except (discord.Forbidden, discord.HTTPException, RuntimeError) as exception:
+            print(f"[potm] Could not assign winner role: {exception}")
+            return
+
+        await self._disable_panel({**state, "phase": "voting"}, "Voting is closed.")
+        state["phase"] = "closed"
+        state["winner_id"] = winner.id
+        channel = await self._get_channel()
+        if channel is not None:
+            result_message = await channel.send(
+                embed=_build_result_embed(state, winner, random_tiebreak=random_tiebreak)
+            )
+            state["result_message_id"] = result_message.id
+        _save_state(state)
+        _archive_cycle(state, "winner_selected")
+
+    async def _run_automatic_cycle(self, current_time: Optional[datetime] = None) -> None:
+        state = _load_state()
+        if not state.get("automatic"):
+            return
+
+        now = current_time or datetime.now(timezone.utc)
+        phase = str(state.get("phase", "idle"))
+        if phase == "scheduled":
+            starts_at = _parse_iso(str(state.get("starts_at", "")))
+            if starts_at is not None and now >= starts_at:
+                state["phase"] = "nominations"
+                _save_state(state)
+                await self._render_panel(state)
+            return
+
+        channel = await self._get_channel()
+        guild = channel.guild if channel is not None else None
+        if guild is None:
+            return
+
+        if phase == "nominations":
+            nominations_end = _parse_iso(str(state.get("nominations_end_at", "")))
+            if nominations_end is None or now < nominations_end:
+                return
+            eligible_ids = {member.id for member in _eligible_members(guild)}
+            finalists = _rank_finalists(state, eligible_ids)
+            if not finalists:
+                await self._close_without_winner(state, "No valid nominations were submitted.")
+                return
+            state["phase"] = "voting"
+            state["finalists"] = finalists
+            state["votes"] = {}
+            _save_state(state)
+            await self._render_panel(state)
+            return
+
+        if phase == "voting":
+            voting_end = _parse_iso(str(state.get("voting_end_at", "")))
+            if voting_end is not None and now >= voting_end:
+                await self._close_automatic_vote(state, guild)
+            return
+
+        if phase == "closed":
+            voting_end = _parse_iso(str(state.get("voting_end_at", "")))
+            if voting_end is None or now < voting_end:
+                return
+            cycle_id = str(state.get("cycle_id", ""))
+            try:
+                year, month = (int(part) for part in cycle_id.split("-", 1))
+            except (TypeError, ValueError):
+                local_now = now.astimezone(PARIS_TZ)
+                year, month = local_now.year, local_now.month
+            next_year, next_month = _next_month(year, month)
+            next_state = _new_automatic_state(next_year, next_month, now=now)
+            _save_state(next_state)
+            await self._render_panel(next_state, force_new=True)
+
+    @tasks.loop(minutes=1)
+    async def automatic_cycle(self) -> None:
+        async with self._lock:
+            try:
+                await self._run_automatic_cycle()
+            except Exception as exception:
+                print(f"[potm] Automatic cycle error: {exception}")
+
+    @automatic_cycle.before_loop
+    async def before_automatic_cycle(self) -> None:
+        await self.bot.wait_until_ready()
+
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         if self._ready_once:
             return
         self._ready_once = True
-        state = _load_state()
-        if state.get("phase") in {"nominations", "voting"}:
-            await self._render_panel(state)
+        async with self._lock:
+            state = _load_state()
+            if state.get("phase") in {"scheduled", "nominations", "voting"}:
+                await self._render_panel(state)
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction) -> None:
@@ -653,7 +979,7 @@ class PlayerOfMonthCog(commands.Cog):
             if member is None or interaction.guild is None:
                 return
             state = _load_state()
-            if state.get("phase") != "nominations":
+            if state.get("phase") != "nominations" or _deadline_passed(state, "nominations_end_at"):
                 return await interaction.response.send_message(
                     "The nomination phase is currently closed.",
                     ephemeral=True,
@@ -682,7 +1008,7 @@ class PlayerOfMonthCog(commands.Cog):
             if member is None or interaction.guild is None:
                 return
             state = _load_state()
-            if state.get("phase") != "nominations":
+            if state.get("phase") != "nominations" or _deadline_passed(state, "nominations_end_at"):
                 return await interaction.response.send_message(
                     "The nomination phase is currently closed.",
                     ephemeral=True,
@@ -731,7 +1057,7 @@ class PlayerOfMonthCog(commands.Cog):
             if member is None or interaction.guild is None:
                 return
             state = _load_state()
-            if state.get("phase") != "voting":
+            if state.get("phase") != "voting" or _deadline_passed(state, "voting_end_at"):
                 return await interaction.response.send_message(
                     "Final voting is currently closed.",
                     ephemeral=True,
@@ -758,6 +1084,11 @@ class PlayerOfMonthCog(commands.Cog):
     async def test_start(self, interaction: discord.Interaction, label: Optional[str] = None) -> None:
         async with self._lock:
             current = _load_state()
+            if current.get("automatic"):
+                return await interaction.response.send_message(
+                    "The automatic monthly cycle is active and cannot be replaced by a test command.",
+                    ephemeral=True,
+                )
             if current.get("phase") in {"nominations", "voting"}:
                 return await interaction.response.send_message(
                     "A test cycle is already active. Use `/potm-test-reset` first if you want to replace it.",
@@ -791,6 +1122,11 @@ class PlayerOfMonthCog(commands.Cog):
 
         async with self._lock:
             state = _load_state()
+            if not state.get("test_mode"):
+                return await interaction.response.send_message(
+                    "This command cannot advance the automatic production cycle.",
+                    ephemeral=True,
+                )
             if state.get("phase") != "nominations":
                 return await interaction.response.send_message(
                     "There is no open nomination phase to close.",
@@ -838,6 +1174,11 @@ class PlayerOfMonthCog(commands.Cog):
 
         async with self._lock:
             state = _load_state()
+            if not state.get("test_mode"):
+                return await interaction.response.send_message(
+                    "This command cannot close the automatic production cycle.",
+                    ephemeral=True,
+                )
             if state.get("phase") != "voting":
                 return await interaction.response.send_message(
                     "There is no open final vote to close.",
@@ -900,30 +1241,7 @@ class PlayerOfMonthCog(commands.Cog):
         if channel is None:
             return await interaction.followup.send("Winner selected, but the result channel is unavailable.", ephemeral=True)
 
-        vote_counts = Counter(int(value) for value in state.get("votes", {}).values())
-        nomination_counts = _nomination_counts(state)
-        category_text, reasons = _candidate_summary(state, winner_id)
-        result = discord.Embed(
-            title=f"🏆 TF Player of the Month — {state.get('label') or 'Test Result'}",
-            description=(
-                f"Congratulations to {winner_member.mention}!\n\n"
-                "This is a **test result** used to preview the complete Player of the Month flow."
-            ),
-            color=discord.Color.gold(),
-            timestamp=datetime.now(timezone.utc),
-        )
-        result.set_thumbnail(url=winner_member.display_avatar.url)
-        result.add_field(name="Recognized for", value=category_text, inline=False)
-        result.add_field(name="Nominations", value=str(nomination_counts[winner_id]), inline=True)
-        result.add_field(name="Final votes", value=str(vote_counts[winner_id]), inline=True)
-        if reasons:
-            result.add_field(name="Community recognition", value=f"*“{reasons[0][:700]}”*", inline=False)
-        result.add_field(
-            name="Reward",
-            value=f"Awarded the <@&{POTM_WINNER_ROLE_ID}> role until the next winner is selected.",
-            inline=False,
-        )
-        result.set_footer(text=f"Winner ID: {winner_id} • Test mode")
+        result = _build_result_embed(state, winner_member)
         result_message = await channel.send(embed=result)
         state["result_message_id"] = result_message.id
         _save_state(state)
@@ -944,6 +1262,11 @@ class PlayerOfMonthCog(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         async with self._lock:
             state = _load_state()
+            if not state.get("test_mode"):
+                return await interaction.followup.send(
+                    "The automatic production cycle cannot be reset with a test command.",
+                    ephemeral=True,
+                )
             await self._disable_panel(state, "This test cycle was reset by staff.")
             role = interaction.guild.get_role(POTM_WINNER_ROLE_ID)
             if role is not None:
@@ -960,7 +1283,7 @@ class PlayerOfMonthCog(commands.Cog):
 
     @app_commands.command(
         name="potm-test-status",
-        description="Show the private status of the current Player of the Month test.",
+        description="Show the private status of the current Player of the Month cycle.",
     )
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -969,6 +1292,7 @@ class PlayerOfMonthCog(commands.Cog):
         counts = _nomination_counts(state)
         vote_counts = Counter(int(value) for value in state.get("votes", {}).values())
         details = [
+            f"Mode: **{'automatic' if state.get('automatic') else 'test'}**",
             f"Phase: **{state.get('phase', 'idle')}**",
             f"Label: **{state.get('label') or 'None'}**",
             f"Nominations: **{len(state.get('nominations', []))}**",
